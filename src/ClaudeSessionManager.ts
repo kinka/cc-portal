@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { ClaudeSession, ClaudeSessionOptions } from './ClaudeSession';
+import { ClaudeSession } from './ClaudeSession';
 import { logger } from './logger';
 
 export interface CreateSessionOptions {
@@ -7,50 +7,26 @@ export interface CreateSessionOptions {
   initialMessage?: string;
   model?: string;
   allowedTools?: string[];
-  disallowedTools?: string[];
   envVars?: Record<string, string>;
-  customSystemPrompt?: string;
-  appendSystemPrompt?: string;
-  maxTurns?: number;
-  mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
 }
 
 export class ClaudeSessionManager {
-  private sessions: Map<string, ClaudeSession> = new Map();
+  private sessions = new Map<string, ClaudeSession>();
 
-  async createSession(options: CreateSessionOptions): Promise<ClaudeSession> {
+  createSession(options: CreateSessionOptions): ClaudeSession {
     const id = randomUUID();
 
-    const sessionOptions: ClaudeSessionOptions = {
+    const session = new ClaudeSession({
       id,
       path: options.path,
       model: options.model,
       allowedTools: options.allowedTools,
-      disallowedTools: options.disallowedTools,
       envVars: options.envVars,
       initialMessage: options.initialMessage,
-      customSystemPrompt: options.customSystemPrompt,
-      appendSystemPrompt: options.appendSystemPrompt,
-      maxTurns: options.maxTurns,
-      mcpServers: options.mcpServers,
-    };
+    });
 
-    const session = new ClaudeSession(sessionOptions);
-
-    // Store session
     this.sessions.set(id, session);
-
-    // Handle session events
-    session.on('exit', () => {
-      logger.info(`[Session ${id}] Process exited`);
-    });
-
-    session.on('error', (error) => {
-      logger.error(`[Session ${id}] Error:`, error);
-    });
-
-    // Start the session
-    await session.start();
+    logger.info(`[Session ${id}] Created`);
 
     return session;
   }
@@ -59,60 +35,31 @@ export class ClaudeSessionManager {
     return this.sessions.get(id);
   }
 
-  listSessions(): Array<{
-    id: string;
-    status: string;
-    path: string;
-    createdAt: string;
-    lastActivityAt?: string;
-  }> {
-    const result = [];
-    for (const [id, session] of this.sessions) {
-      result.push({
-        id,
-        status: session.status,
-        path: session.path,
-        createdAt: session.createdAt.toISOString(),
-        lastActivityAt: session.lastActivityAt?.toISOString(),
-      });
-    }
-    return result;
+  listSessions() {
+    return Array.from(this.sessions.values()).map(s => ({
+      id: s.id,
+      status: s.status,
+      path: s.path,
+      createdAt: s.createdAt.toISOString(),
+    }));
   }
 
-  async stopSession(id: string): Promise<void> {
+  stopSession(id: string): void {
     const session = this.sessions.get(id);
-    if (!session) {
-      throw new Error(`Session ${id} not found`);
-    }
-
-    await session.stop();
+    if (!session) throw new Error(`Session ${id} not found`);
+    session.stop();
   }
 
-  async deleteSession(id: string): Promise<void> {
-    const session = this.sessions.get(id);
-    if (!session) {
-      throw new Error(`Session ${id} not found`);
-    }
-
-    await session.stop();
-    session.cleanup();
+  deleteSession(id: string): void {
+    this.stopSession(id);
     this.sessions.delete(id);
     logger.info(`[Session ${id}] Deleted`);
   }
 
-  async stopAllSessions(): Promise<void> {
-    logger.info(`Stopping all ${this.sessions.size} sessions...`);
-    const promises: Promise<void>[] = [];
-
-    for (const [id, session] of this.sessions) {
-      promises.push(
-        session.stop().catch((error) => {
-          logger.error(`[Session ${id}] Error stopping:`, error);
-        })
-      );
+  stopAllSessions(): void {
+    for (const session of this.sessions.values()) {
+      session.stop();
     }
-
-    await Promise.all(promises);
     logger.info('All sessions stopped');
   }
 }

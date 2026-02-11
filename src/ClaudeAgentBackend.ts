@@ -1,293 +1,202 @@
-import { randomUUID } from 'node:crypto';
-import {
-  AgentBackend,
-  AgentBackendConfig,
-  AgentMessage,
-  AgentMessageHandler,
-  SessionId,
-  StartSessionResult,
-} from './AgentBackend';
-import { query } from './sdk/query';
-import type { Query } from './sdk/query';
-import { SDKMessage, AbortError, QueryOptions } from './sdk/types';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { createInterface } from 'node:readline';
 import { logger } from './logger';
 
-export interface ClaudeAgentBackendOptions extends AgentBackendConfig {
-  model?: string;
-  allowedTools?: string[];
-  disallowedTools?: string[];
-  customSystemPrompt?: string;
-  appendSystemPrompt?: string;
-  maxTurns?: number;
-}
-
-interface ActiveSession {
-  id: SessionId;
-  query: Query;
-  abortController: AbortController;
-  messageQueue: SDKMessage[];
-  isRunning: boolean;
-}
-
 /**
- * Claude Agent Backend implementation using happy-cli SDK
+ * SDK Message types from Claude Code
  */
-export class ClaudeAgentBackend implements AgentBackend {
-  private config: ClaudeAgentBackendOptions;
-  private messageHandlers: AgentMessageHandler[] = [];
-  private sessions: Map<SessionId, ActiveSession> = new Map();
+export interface SDKMessage {
+  type: string;
+  [key: string]: unknown;
+}
 
-  constructor(config: ClaudeAgentBackendOptions) {
-    this.config = config;
+export interface SDKUserMessage extends SDKMessage {
+  type: 'user';
+  message: {
+    role: 'user';
+    content: string;
+  };
+}
+
+export interface SDKAssistantMessage extends SDKMessage {
+  type: 'assistant';
+  message: {
+    role: 'assistant';
+    content: Array<{
+      type: string;
+      text?: string;
+      id?: string;
+      name?: string;
+      input?: unknown;
+    }>;
+  };
+}
+
+export interface SDKResultMessage extends SDKMessage {
+  type: 'result';
+  subtype: 'success' | 'error_max_turns' | 'error_during_execution';
+  result?: string;
+  num_turns: number;
+  session_id: string;
+  is_error: boolean;
+}
+
+export interface SDKSystemMessage extends SDKMessage {
+  type: 'system';
+  subtype: string;
+  session_id?: string;
+  model?: string;
+}
+
+export class ClaudeAgentBackend {
+  private cwd: string;
+  private claudeSessionId: string;
+  private model?: string;
+  private allowedTools?: string[];
+  private isFirstQuery = true;
+  private child?: ChildProcessWithoutNullStreams;
+
+  constructor(options: {
+    cwd: string;
+    claudeSessionId: string;
+    model?: string;
+    allowedTools?: string[];
+  }) {
+    this.cwd = options.cwd;
+    this.claudeSessionId = options.claudeSessionId;
+    this.model = options.model;
+    this.allowedTools = options.allowedTools;
   }
 
-  async startSession(initialPrompt?: string): Promise<StartSessionResult> {
-    const sessionId = randomUUID();
-    const abortController = new AbortController();
+  async query(message: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const args = [
+        '--output-format', 'stream-json',
+        '--input-format', 'stream-json',
+        '--verbose'
+      ];
 
-    logger.info(`[ClaudeAgentBackend] Starting session ${sessionId}`);
-
-    // Build query options
-    const options: QueryOptions = {
-      abort: abortController.signal,
-      cwd: this.config.cwd,
-      allowedTools: this.config.allowedTools,
-      disallowedTools: this.config.disallowedTools,
-      customSystemPrompt: this.config.customSystemPrompt,
-      appendSystemPrompt: this.config.appendSystemPrompt,
-      maxTurns: this.config.maxTurns ?? 100,
-      model: this.config.model,
-      mcpServers: this.config.mcpServers,
-      // Note: canCallTool requires AsyncIterable prompt, skip for now
-      // canCallTool: this.handleCanCallTool.bind(this),
-    };
-
-    // Create query
-    const prompt = initialPrompt || 'Hello';
-    const sdkQuery = query({ prompt, options });
-
-    const session: ActiveSession = {
-      id: sessionId,
-      query: sdkQuery,
-      abortController,
-      messageQueue: [],
-      isRunning: true,
-    };
-
-    this.sessions.set(sessionId, session);
-
-    // Start processing messages
-    this.processMessages(session);
-
-    // Emit status
-    this.emitMessage({ type: 'status', status: 'starting' });
-
-    return { sessionId };
-  }
-
-  async sendPrompt(sessionId: SessionId, prompt: string): Promise<void> {
-    const session = this.sessions.get(sessionId);
-    if (!session) {
-      throw new Error(`Session ${sessionId} not found`);
-    }
-
-    logger.debug(`[ClaudeAgentBackend] Sending prompt to session ${sessionId}`);
-
-    // For now, we need to create a new query for each prompt
-    // In a real implementation, we'd maintain a persistent connection
-    const options: QueryOptions = {
-      abort: session.abortController.signal,
-      cwd: this.config.cwd,
-      allowedTools: this.config.allowedTools,
-      disallowedTools: this.config.disallowedTools,
-      model: this.config.model,
-      mcpServers: this.config.mcpServers,
-      // Note: canCallTool requires AsyncIterable prompt, skip for now
-      // canCallTool: this.handleCanCallTool.bind(this),
-    };
-
-    // Cancel previous query if running
-    if (session.isRunning) {
-      session.abortController.abort();
-      // Create new abort controller for new query
-      session.abortController = new AbortController();
-      options.abort = session.abortController.signal;
-    }
-
-    // Create new query
-    session.query = query({ prompt, options });
-    session.isRunning = true;
-
-    // Process messages
-    this.processMessages(session);
-  }
-
-  async cancel(sessionId: SessionId): Promise<void> {
-    const session = this.sessions.get(sessionId);
-    if (!session) {
-      throw new Error(`Session ${sessionId} not found`);
-    }
-
-    logger.info(`[ClaudeAgentBackend] Cancelling session ${sessionId}`);
-    session.abortController.abort();
-    session.isRunning = false;
-
-    this.emitMessage({ type: 'status', status: 'idle' });
-  }
-
-  onMessage(handler: AgentMessageHandler): void {
-    this.messageHandlers.push(handler);
-  }
-
-  offMessage(handler: AgentMessageHandler): void {
-    const index = this.messageHandlers.indexOf(handler);
-    if (index > -1) {
-      this.messageHandlers.splice(index, 1);
-    }
-  }
-
-  async respondToPermission(requestId: string, approved: boolean): Promise<void> {
-    // TODO: Implement permission handling
-    logger.debug(`[ClaudeAgentBackend] Permission response: ${requestId} = ${approved}`);
-    this.emitMessage({ type: 'permission-response', id: requestId, approved });
-  }
-
-  async waitForResponseComplete(_timeoutMs?: number): Promise<void> {
-    // This method should be called per-session, but the interface doesn't support it
-    // For now, just wait for all sessions to complete
-    const timeout = _timeoutMs ?? 120000;
-    const startTime = Date.now();
-    while (Array.from(this.sessions.values()).some(s => s.isRunning)) {
-      if (Date.now() - startTime > timeout) {
-        throw new Error('Timeout waiting for response');
-      }
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-  }
-
-  async dispose(): Promise<void> {
-    logger.info('[ClaudeAgentBackend] Disposing...');
-
-    // Cancel all sessions
-    for (const [sessionId, session] of this.sessions) {
-      await this.cancel(sessionId);
-    }
-
-    this.sessions.clear();
-    this.messageHandlers = [];
-  }
-
-  private async processMessages(session: ActiveSession): Promise<void> {
-    try {
-      this.emitMessage({ type: 'status', status: 'running' });
-
-      for await (const message of session.query) {
-        if (session.abortController.signal.aborted) {
-          break;
-        }
-
-        session.messageQueue.push(message);
-        const agentMessage = this.convertSDKMessage(message);
-        this.emitMessage(agentMessage);
-      }
-
-      session.isRunning = false;
-      this.emitMessage({ type: 'status', status: 'idle' });
-
-    } catch (error) {
-      if (error instanceof AbortError) {
-        logger.debug(`[ClaudeAgentBackend] Session ${session.id} aborted`);
-        session.isRunning = false;
-        this.emitMessage({ type: 'status', status: 'idle' });
+      if (this.isFirstQuery) {
+        args.push('--session-id', this.claudeSessionId);
+        this.isFirstQuery = false;
       } else {
-        logger.error(`[ClaudeAgentBackend] Session ${session.id} error:`, error);
-        session.isRunning = false;
-        this.emitMessage({
-          type: 'error',
-          error: String(error),
-        });
-        this.emitMessage({ type: 'status', status: 'error', detail: String(error) });
+        args.push('--resume', this.claudeSessionId);
       }
-    }
-  }
 
-  private convertSDKMessage(sdkMsg: SDKMessage): AgentMessage {
-    const msg = sdkMsg as any;
-    switch (msg.type) {
-      case 'user':
-        return {
-          type: 'model-output',
-          fullText: typeof msg.message?.content === 'string'
-            ? msg.message.content
-            : JSON.stringify(msg.message?.content),
-        };
+      if (this.model) args.push('--model', this.model);
+      if (this.allowedTools?.length) args.push('--allowedTools', this.allowedTools.join(','));
 
-      case 'assistant':
-        const content = msg.message?.content;
-        let text = '';
-        if (Array.isArray(content)) {
-          for (const item of content) {
-            if (item.type === 'text' && item.text) {
-              text += item.text;
+      logger.info(`[ClaudeAgent] Spawning: claude ${args.slice(0, 4).join(' ')}...`);
+
+      // 使用本地安装的 claude 命令
+      this.child = spawn('claude', args, {
+        cwd: this.cwd,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: process.env,
+      }) as ChildProcessWithoutNullStreams;
+
+      let fullText = '';
+      let resultMessage: SDKResultMessage | null = null;
+      let errorOutput = '';
+      let isCompleted = false;
+
+      // 处理 stdout - JSON stream
+      const rl = createInterface({ input: this.child.stdout! });
+
+      rl.on('line', (line) => {
+        if (!line.trim()) return;
+
+        try {
+          const msg = JSON.parse(line) as SDKMessage;
+
+          switch (msg.type) {
+            case 'assistant': {
+              const assistantMsg = msg as SDKAssistantMessage;
+              // 收集文本增量
+              for (const content of assistantMsg.message.content) {
+                if (content.type === 'text' && content.text) {
+                  fullText += content.text;
+                }
+              }
+              break;
             }
+
+            case 'result': {
+              resultMessage = msg as SDKResultMessage;
+              isCompleted = true;
+              // 收到 result 后关闭 stdin，让进程正常退出
+              this.child?.stdin?.end();
+              break;
+            }
+
+            case 'system': {
+              const systemMsg = msg as SDKSystemMessage;
+              logger.debug(`[Claude] System: ${systemMsg.subtype}`);
+              break;
+            }
+
+            case 'log': {
+              // 忽略日志消息
+              break;
+            }
+
+            default:
+              logger.debug(`[Claude] Unknown message type: ${msg.type}`);
           }
+        } catch (e) {
+          // 非 JSON 行，可能是调试输出
+          logger.debug(`[Claude stdout] ${line}`);
         }
-        return { type: 'model-output', textDelta: text, fullText: text };
+      });
 
-      case 'result':
-        return {
-          type: 'model-output',
-          fullText: msg.result || '',
-        };
+      // 处理 stderr
+      this.child.stderr!.on('data', (data) => {
+        errorOutput += data.toString();
+      });
 
-      case 'system':
-        return {
-          type: 'status',
-          status: 'running',
-          detail: `Model: ${msg.model || 'unknown'}`,
-        };
+      // 处理错误
+      this.child.on('error', (error) => {
+        reject(new Error(`Failed to spawn Claude: ${error.message}`));
+      });
 
-      case 'log':
-        return {
-          type: 'terminal-output',
-          data: msg.log?.message || '',
-        };
+      // 处理退出
+      this.child.on('close', (code) => {
+        if (code !== 0 && !resultMessage && !fullText) {
+          reject(new Error(`Claude exited with code ${code}: ${errorOutput}`));
+          return;
+        }
 
-      default:
-        return {
-          type: 'event',
-          name: msg.type,
-          payload: msg,
-        };
-    }
-  }
+        if (resultMessage?.is_error) {
+          reject(new Error(`Claude error: ${resultMessage.result || 'Unknown error'}`));
+          return;
+        }
 
-  private async handleCanCallTool(
-    toolName: string,
-    input: unknown,
-    _options: { signal: AbortSignal }
-  ): Promise<{ behavior: 'allow'; updatedInput: Record<string, unknown> } | { behavior: 'deny'; message: string }> {
-    // Emit permission request
-    const requestId = randomUUID();
-    this.emitMessage({
-      type: 'permission-request',
-      id: requestId,
-      reason: `Tool call: ${toolName}`,
-      payload: { toolName, input },
+        resolve(fullText.trim() || resultMessage?.result || '');
+      });
+
+      // 发送用户消息
+      const userMessage: SDKUserMessage = {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: message
+        }
+      };
+      this.child.stdin!.write(JSON.stringify(userMessage) + '\n');
+
+      // 2分钟超时
+      setTimeout(() => {
+        if (this.child && !this.child.killed) {
+          this.child.kill('SIGTERM');
+          reject(new Error('Timeout'));
+        }
+      }, 120000);
     });
-
-    // For now, auto-allow all tools
-    // In a real implementation, you'd wait for user approval
-    return { behavior: 'allow', updatedInput: input as Record<string, unknown> };
   }
 
-  private emitMessage(message: AgentMessage): void {
-    for (const handler of this.messageHandlers) {
-      try {
-        handler(message);
-      } catch (error) {
-        logger.error('[ClaudeAgentBackend] Error in message handler:', error);
-      }
+  cancel(): void {
+    if (this.child && !this.child.killed) {
+      this.child.kill('SIGTERM');
     }
   }
 }

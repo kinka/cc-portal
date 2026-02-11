@@ -7,21 +7,13 @@
     "start": "bun src/index.ts",
     "dev": "bun --watch src/index.ts",
     "build": "bun build src/index.ts --outdir dist",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "fastify": "^5.2.0",
-    "fastify-type-provider-zod": "^4.0.2",
-    "zod": "^3.24.2",
-    "uuid": "^9.0.1",
-    "chalk": "^5.4.1"
+    "fastify": "^5.2.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.3",
-    "@types/uuid": "^9.0.8",
-    "typescript": "^5.4.3",
-    "vitest": "^3.2.0"
+    "typescript": "^5.4.3"
   }
 }
