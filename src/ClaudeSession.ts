@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
-import { ClaudeAgentBackend } from './ClaudeAgentBackend';
+import { ClaudeAgentBackend, type StreamChunk } from './ClaudeAgentBackend';
 import { logger } from './logger';
 
 export interface ClaudeSessionOptions {
@@ -77,6 +77,43 @@ export class ClaudeSession extends EventEmitter {
     return response;
   }
 
+  // 流式发送消息 - 实时返回 chunks
+  async *sendMessageStream(content: string): AsyncGenerator<StreamChunk> {
+    if (this._status !== 'running') {
+      throw new Error('Session not running');
+    }
+
+    // Add user message
+    this.messages.push({
+      id: randomUUID(),
+      role: 'user',
+      content,
+      timestamp: new Date(),
+    });
+
+    let fullResponse = '';
+
+    // Query Claude with stream
+    try {
+      for await (const chunk of this.backend.queryStream(content)) {
+        if (chunk.type === 'text' && chunk.content) {
+          fullResponse += chunk.content;
+        }
+        yield chunk;
+      }
+    } finally {
+      // Add assistant message (只有在有内容时才添加)
+      if (fullResponse) {
+        this.messages.push({
+          id: randomUUID(),
+          role: 'assistant',
+          content: fullResponse,
+          timestamp: new Date(),
+        });
+      }
+    }
+  }
+
   getMessages(): Message[] {
     return [...this.messages];
   }
@@ -87,6 +124,7 @@ export class ClaudeSession extends EventEmitter {
 
   stop() {
     this._status = 'stopped';
+    this.backend.destroy();
     this.emit('stopped');
   }
 }
