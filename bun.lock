@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "claude-agent-http-service",
+      "name": "cc-agents",
       "dependencies": {
         "fastify": "^5.2.0",
       },

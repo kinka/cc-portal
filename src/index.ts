@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { realpathSync } from 'node:fs';
 import { ClaudeSessionManager } from './ClaudeSessionManager';
 import { logger } from './logger';
 
@@ -49,7 +50,12 @@ fastify.post('/sessions', async (request, reply) => {
     initialMessage?: string;
     model?: string;
     allowedTools?: string[];
+    disallowedTools?: string[];
+    permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
+    mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
+    maxTurns?: number;
     envVars?: Record<string, string>;
+    bypassPermission?: boolean;
   };
 
   if (!body.path) {
@@ -58,12 +64,21 @@ fastify.post('/sessions', async (request, reply) => {
   }
 
   try {
+    // 解析符号链接，获取真实路径（处理 macOS /tmp -> /private/tmp 等问题）
+    const realPath = realpathSync(body.path);
+    logger.info(`[Session] Creating session with path: ${body.path} -> ${realPath}`);
+
     const session = sessionManager.createSession({
-      path: body.path,
+      path: realPath,
       initialMessage: body.initialMessage,
       model: body.model,
       allowedTools: body.allowedTools,
+      disallowedTools: body.disallowedTools,
+      permissionMode: body.permissionMode,
+      mcpServers: body.mcpServers,
+      maxTurns: body.maxTurns,
       envVars: body.envVars,
+      bypassPermission: body.bypassPermission,
     });
 
     return {
@@ -123,6 +138,40 @@ fastify.post('/sessions/:sessionId/messages', async (request, reply) => {
   }
 });
 
+// Stream message to session (SSE - Server Sent Events)
+fastify.get('/sessions/:sessionId/stream', async (request, reply) => {
+  const { sessionId } = request.params as { sessionId: string };
+  const message = (request.query as { message: string }).message;
+
+  const session = sessionManager.getSession(sessionId);
+  if (!session) {
+    reply.status(404);
+    return { error: 'Session not found' };
+  }
+
+  reply.raw.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+  });
+
+  try {
+    const stream = await session.sendMessageStream(message);
+
+    for await (const chunk of stream) {
+      reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+    }
+
+    reply.raw.write('data: [DONE]\n\n');
+    reply.raw.end();
+  } catch (error) {
+    logger.error('Stream error:', error);
+    reply.raw.write(`data: ${JSON.stringify({ error: String(error) })}\n\n`);
+    reply.raw.end();
+  }
+});
+
 // Stop session
 fastify.post('/sessions/:sessionId/stop', async (request, reply) => {
   const { sessionId } = request.params as { sessionId: string };
@@ -155,7 +204,7 @@ fastify.delete('/sessions/:sessionId', async (request, reply) => {
 // Start server
 const start = async () => {
   try {
-    const port = parseInt(process.env.PORT || '3456', 10);
+    const port = parseInt(process.env.PORT || '3333', 10);
     const host = process.env.HOST || '0.0.0.0';
 
     await fastify.listen({ port, host });

@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>异形金色按钮演示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background: #f0f4f8;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 40px;
+        }
+
+        /* 演示卡片容器 */
+        .demo-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+
+        .card {
+            background: linear-gradient(135deg, #fff8e7 0%, #ffe4b5 100%);
+            border-radius: 16px;
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+            min-height: 140px;
+        }
+
+        .card-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #8b4513;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-title::before {
+            content: '📦';
+        }
+
+        .card-desc {
+            color: #a0522d;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .tags {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        .tag {
+            background: rgba(255, 255, 255, 0.6);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            color: #8b4513;
+        }
+
+        /* ========== 异形金色按钮核心样式 ========== */
+        .golden-badge {
+            position: absolute;
+            top: 0;
+            right: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 100px;
+            padding: 0 16px;
+            height: 52px;
+            /* 动态计算宽度：内容宽度 + padding */
+            cursor: pointer;
+            transition: transform 0.2s, filter 0.2s;
+            user-select: none;
+        }
+
+        .golden-badge:hover {
+            transform: scale(1.02);
+            filter: brightness(1.05);
+        }
+
+        .golden-badge:active {
+            transform: scale(0.98);
+        }
+
+        /* SVG 背景层 */
+        .badge-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        /* 按钮内容层 */
+        .badge-content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            padding-right: 4px;
+        }
+
+        /* 主标题 */
+        .badge-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* 元宝图标 - 使用内联 SVG 更精致 */
+        .badge-title::before {
+            content: '';
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cdefs%3E%3ClinearGradient id='sycee' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23FFF8DC'/%3E%3Cstop offset='50%25' stop-color='%23FFD700'/%3E%3Cstop offset='100%25' stop-color='%23FFA500'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cellipse cx='12' cy='16' rx='9' ry='6' fill='url(%23sycee)' stroke='%23FF8C00' stroke-width='0.5'/%3E%3Cellipse cx='12' cy='10' rx='4' ry='3' fill='url(%23sycee)' stroke='%23FF8C00' stroke-width='0.5'/%3E%3Cpath d='M8,10 Q12,6 16,10' fill='none' stroke='%23FF8C00' stroke-width='0.5'/%3E%3C/svg%3E") no-repeat center;
+            background-size: contain;
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+        }
+
+        /* 去掉原来的伪元素 */
+        .badge-title::after {
+            display: none;
+        }
+
+        /* 副标题/说明 */
+        .badge-subtitle {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.95);
+            white-space: nowrap;
+            margin-top: 2px;
+        }
+
+        /* ========== 交互演示区 ========== */
+        .interactive-section {
+            background: #fff;
+            border-radius: 16px;
+            padding: 30px;
+            margin-top: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .input-group input {
+            flex: 1;
+            min-width: 200px;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .input-group input:focus {
+            border-color: #ffa500;
+        }
+
+        .input-group button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #ffa500, #ff8c00);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .input-group button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 140, 0, 0.4);
+        }
+
+        /* 自定义卡片预览 */
+        .preview-card {
+            background: linear-gradient(135deg, #fff8e7 0%, #ffe4b5 100%);
+            border-radius: 16px;
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+            min-height: 140px;
+            border: 2px dashed #ffd700;
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 600px) {
+            .golden-badge {
+                height: 44px;
+                min-width: 80px;
+                padding: 0 12px;
+            }
+            .badge-title {
+                font-size: 13px;
+            }
+            .badge-subtitle {
+                font-size: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 异形金色按钮演示</h1>
+
+        <div class="demo-cards">
+            <!-- 示例 1：短文案 -->
+            <div class="card">
+                <div class="golden-badge" id="badge1">
+                    <svg class="badge-bg" preserveAspectRatio="none" viewBox="0 0 140 52">
+                        <defs>
+                            <!-- 金色渐变 - 更有金属质感 -->
+                            <linearGradient id="goldGradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#FFE4A0"/>
+                                <stop offset="30%" stop-color="#FFD700"/>
+                                <stop offset="60%" stop-color="#FFA500"/>
+                                <stop offset="100%" stop-color="#FF8C00"/>
+                            </linearGradient>
+                            <!-- 底部阴影渐变 - 深橙色到透明 -->
+                            <linearGradient id="bottomShadow1" x1="0%" y1="100%" x2="0%" y2="0%">
+                                <stop offset="0%" stop-color="#cc6600" stop-opacity="0.4"/>
+                                <stop offset="60%" stop-color="#ff9500" stop-opacity="0.15"/>
+                                <stop offset="100%" stop-color="transparent"/>
+                            </linearGradient>
+                        </defs>
+                        <!-- 主体形状：左侧向内凹（像╲），顶部平直，右上角圆弧，右下角斜切圆润 -->
+                        <path d="M 30,0 L 100,0 C 115,0 125,5 132,15 L 140,28 C 143,35 142,42 135,48 C 128,52 120,52 100,52 L 30,52 C 20,48 15,40 18,28 C 22,18 26,8 30,0 Z" 
+                              fill="url(#goldGradient1)"/>
+                        <!-- 底部渐变装饰 -->
+                        <path d="M 28,35 C 30,42 28,48 25,52 L 140,52 C 140,52 140,44 135,44 C 128,48 120,48 100,48 L 25,48 C 28,44 29,40 28,35 Z" 
+                              fill="url(#bottomShadow1)"/>
+                    </svg>
+                    <div class="badge-content">
+                        <span class="badge-title">0元签约</span>
+                        <span class="badge-subtitle">每笔另收0.02%</span>
+                    </div>
+                </div>
+                <div class="card-title">财富锦囊G套餐</div>
+                <div class="card-desc">这是短文案示例，主标题和副标题都比较简短</div>
+                <div class="tags">
+                    <span class="tag">每周金股</span>
+                    <span class="tag">智能选股</span>
+                </div>
+            </div>
+
+            <!-- 示例 2：中等文案 -->
+            <div class="card">
+                <div class="golden-badge" id="badge2">
+                    <svg class="badge-bg" preserveAspectRatio="none" viewBox="0 0 160 52">
+                        <defs>
+                            <linearGradient id="goldGradient2" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#FFE4A0"/>
+                                <stop offset="30%" stop-color="#FFD700"/>
+                                <stop offset="60%" stop-color="#FFA500"/>
+                                <stop offset="100%" stop-color="#FF8C00"/>
+                            </linearGradient>
+                            <linearGradient id="bottomShadow2" x1="0%" y1="100%" x2="0%" y2="0%">
+                                <stop offset="0%" stop-color="#cc6600" stop-opacity="0.4"/>
+                                <stop offset="60%" stop-color="#ff9500" stop-opacity="0.15"/>
+                                <stop offset="100%" stop-color="transparent"/>
+                            </linearGradient>
+                        </defs>
+                        <path d="M 30,0 L 120,0 C 135,0 145,5 152,15 L 160,28 C 163,35 162,42 155,48 C 148,52 140,52 120,52 L 30,52 C 20,48 15,40 18,28 C 22,18 26,8 30,0 Z" 
+                              fill="url(#goldGradient2)"/>
+                        <path d="M 28,35 C 30,42 28,48 25,52 L 160,52 C 160,52 160,44 155,44 C 148,48 140,48 120,48 L 25,48 C 28,44 29,40 28,35 Z" 
+                              fill="url(#bottomShadow2)"/>
+                    </svg>
+                    <div class="badge-content">
+                        <span class="badge-title">限时特惠</span>
+                        <span class="badge-subtitle">首月免费体验</span>
+                    </div>
+                </div>
+                <div class="card-title">VIP尊享服务</div>
+                <div class="card-desc">这是中等长度文案示例，按钮宽度会自动适应内容</div>
+                <div class="tags">
+                    <span class="tag">专属客服</span>
+                    <span class="tag">优先办理</span>
+                    <span class="tag">手续费减免</span>
+                </div>
+            </div>
+
+            <!-- 示例 3：长文案 -->
+            <div class="card">
+                <div class="golden-badge" id="badge3">
+                    <svg class="badge-bg" preserveAspectRatio="none" viewBox="0 0 180 52">
+                        <defs>
+                            <linearGradient id="goldGradient3" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#FFE4A0"/>
+                                <stop offset="30%" stop-color="#FFD700"/>
+                                <stop offset="60%" stop-color="#FFA500"/>
+                                <stop offset="100%" stop-color="#FF8C00"/>
+                            </linearGradient>
+                            <linearGradient id="bottomShadow3" x1="0%" y1="100%" x2="0%" y2="0%">
+                                <stop offset="0%" stop-color="#cc6600" stop-opacity="0.4"/>
+                                <stop offset="60%" stop-color="#ff9500" stop-opacity="0.15"/>
+                                <stop offset="100%" stop-color="transparent"/>
+                            </linearGradient>
+                        </defs>
+                        <path d="M 30,0 L 140,0 C 155,0 165,5 172,15 L 180,28 C 183,35 182,42 175,48 C 168,52 160,52 140,52 L 30,52 C 20,48 15,40 18,28 C 22,18 26,8 30,0 Z" 
+                              fill="url(#goldGradient3)"/>
+                        <path d="M 28,35 C 30,42 28,48 25,52 L 180,52 C 180,52 180,44 175,44 C 168,48 160,48 140,48 L 25,48 C 28,44 29,40 28,35 Z" 
+                              fill="url(#bottomShadow3)"/>
+                    </svg>
+                    <div class="badge-content">
+                        <span class="badge-title">新用户专享福利</span>
+                        <span class="badge-subtitle">开户即送100元红包</span>
+                    </div>
+                </div>
+                <div class="card-title">黄金投资组合方案</div>
+                <div class="card-desc">这是长文案示例，展示按钮可以容纳更长的文字内容</div>
+                <div class="tags">
+                    <span class="tag">稳健收益</span>
+                    <span class="tag">风险可控</span>
+                    <span class="tag">专业团队</span>
+                </div>
+            </div>
+
+            <!-- 示例 4：只有主标题 -->
+            <div class="card">
+                <div class="golden-badge" id="badge4">
+                    <svg class="badge-bg" preserveAspectRatio="none" viewBox="0 0 100 52">
+                        <defs>
+                            <linearGradient id="goldGradient4" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#FFE4A0"/>
+                                <stop offset="30%" stop-color="#FFD700"/>
+                                <stop offset="60%" stop-color="#FFA500"/>
+                                <stop offset="100%" stop-color="#FF8C00"/>
+                            </linearGradient>
+                            <linearGradient id="bottomShadow4" x1="0%" y1="100%" x2="0%" y2="0%">
+                                <stop offset="0%" stop-color="#cc6600" stop-opacity="0.4"/>
+                                <stop offset="60%" stop-color="#ff9500" stop-opacity="0.15"/>
+                                <stop offset="100%" stop-color="transparent"/>
+                            </linearGradient>
+                        </defs>
+                        <path d="M 25,0 L 60,0 C 75,0 85,5 92,15 L 100,28 C 103,35 102,42 95,48 C 88,52 80,52 60,52 L 25,52 C 18,48 13,40 16,28 C 20,18 23,8 25,0 Z" 
+                              fill="url(#goldGradient4)"/>
+                        <path d="M 28,35 C 30,42 28,48 25,52 L 100,52 C 100,52 100,44 95,44 C 88,48 80,48 60,48 L 25,48 C 28,44 29,40 28,35 Z" 
+                              fill="url(#bottomShadow4)"/>
+                    </svg>
+                    <div class="badge-content" style="justify-content: center;">
+                        <span class="badge-title">HOT</span>
+                    </div>
+                </div>
+                <div class="card-title">热门理财产品</div>
+                <div class="card-desc">单行情案示例，只有主标题没有副标题</div>
+                <div class="tags">
+                    <span class="tag">热销中</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 交互演示区 -->
+        <div class="interactive-section">
+            <div class="section-title">🎮 交互演示 - 自定义按钮文案</div>
+            <div class="input-group">
+                <input type="text" id="customTitle" placeholder="输入主标题（如：限时特惠）" value="超值优惠">
+                <input type="text" id="customSubtitle" placeholder="输入副标题（如：首月免费）" value="立减50元">
+                <button onclick="updateBadge()">更新按钮</button>
+            </div>
+            
+            <div class="preview-card">
+                <div class="golden-badge" id="customBadge">
+                    <svg class="badge-bg" preserveAspectRatio="none" viewBox="0 0 140 52">
+                        <defs>
+                            <linearGradient id="goldGradientCustom" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#FFE4A0"/>
+                                <stop offset="30%" stop-color="#FFD700"/>
+                                <stop offset="60%" stop-color="#FFA500"/>
+                                <stop offset="100%" stop-color="#FF8C00"/>
+                            </linearGradient>
+                            <linearGradient id="bottomShadowCustom" x1="0%" y1="100%" x2="0%" y2="0%">
+                                <stop offset="0%" stop-color="#cc6600" stop-opacity="0.4"/>
+                                <stop offset="60%" stop-color="#ff9500" stop-opacity="0.15"/>
+                                <stop offset="100%" stop-color="transparent"/>
+                            </linearGradient>
+                        </defs>
+                        <path d="M 30,0 L 100,0 C 115,0 125,5 132,15 L 140,28 C 143,35 142,42 135,48 C 128,52 120,52 100,52 L 30,52 C 20,48 15,40 18,28 C 22,18 26,8 30,0 Z" 
+                              fill="url(#goldGradientCustom)"/>
+                        <path d="M 28,35 C 30,42 28,48 25,52 L 140,52 C 140,52 140,44 135,44 C 128,48 120,48 100,48 L 25,48 C 28,44 29,40 28,35 Z" 
+                              fill="url(#bottomShadowCustom)"/>
+                    </svg>
+                    <div class="badge-content">
+                        <span class="badge-title" id="previewTitle">超值优惠</span>
+                        <span class="badge-subtitle" id="previewSubtitle">立减50元</span>
+                    </div>
+                </div>
+                <div class="card-title">自定义预览</div>
+                <div class="card-desc">在上面输入框中修改文案，点击"更新按钮"查看效果</div>
+                <div class="tags">
+                    <span class="tag">动态适配</span>
+                    <span class="tag">实时预览</span>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px; padding: 16px; background: #f8f9fa; border-radius: 8px; font-size: 13px; color: #666;">
+                <strong>💡 实现要点：</strong>
+                <ul style="margin-top: 8px; padding-left: 20px; line-height: 1.8;">
+                    <li>使用 SVG <code>preserveAspectRatio="none"</code> 实现背景自适应宽度</li>
+                    <li>通过 JavaScript 动态计算文字宽度，调整按钮容器宽度</li>
+                    <li>金色渐变使用 <code>linear-gradient</code> 从 #FFD700 到 #FF8C00</li>
+                    <li>底部阴影使用半透明渐变，增加立体感</li>
+                    <li>异形通过 SVG path 的贝塞尔曲线精确控制</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 更新自定义按钮
+        function updateBadge() {
+            const title = document.getElementById('customTitle').value || '超值优惠';
+            const subtitle = document.getElementById('customSubtitle').value || '立减50元';
+            
+            document.getElementById('previewTitle').textContent = title;
+            document.getElementById('previewSubtitle').textContent = subtitle;
+            
+            // 根据文字长度动态调整按钮宽度
+            adjustBadgeWidth('customBadge', title, subtitle);
+        }
+
+        // 动态调整按钮宽度以适应文案
+        function adjustBadgeWidth(badgeId, title, subtitle) {
+            const badge = document.getElementById(badgeId);
+            const content = badge.querySelector('.badge-content');
+            const svg = badge.querySelector('svg');
+            
+            // 创建临时元素测量文字宽度
+            const tempDiv = document.createElement('div');
+            tempDiv.style.cssText = `
+                position: absolute;
+                visibility: hidden;
+                white-space: nowrap;
+                font-family: inherit;
+            `;
+            document.body.appendChild(tempDiv);
+            
+            // 测量主标题宽度
+            tempDiv.style.fontSize = '15px';
+            tempDiv.style.fontWeight = 'bold';
+            tempDiv.textContent = title;
+            const titleWidth = tempDiv.offsetWidth;
+            
+            // 测量副标题宽度
+            tempDiv.style.fontSize = '11px';
+            tempDiv.style.fontWeight = 'normal';
+            tempDiv.textContent = subtitle;
+            const subtitleWidth = tempDiv.offsetWidth;
+            
+            document.body.removeChild(tempDiv);
+            
+            // 计算需要的宽度（取最大值 + padding + 图标空间 + 左侧弧线空间）
+            const contentWidth = Math.max(titleWidth, subtitleWidth);
+            const minWidth = 120; // 最小宽度（左侧弧线需要更多空间）
+            const padding = 50; // 左右padding + 图标 + 左侧弧线
+            const newWidth = Math.max(minWidth, contentWidth + padding);
+            
+            // 应用新宽度
+            badge.style.width = newWidth + 'px';
+            
+            // 更新 SVG viewBox 和 path
+            const pathWidth = newWidth;
+            const curveStart = pathWidth - 40;
+            const controlX1 = pathWidth - 20;
+            const peakX = pathWidth;
+            const peakY = 26;
+            const bottomExtend = pathWidth + 5;
+            
+            // 更新 SVG viewBox
+            svg.setAttribute('viewBox', `0 0 ${pathWidth} 52`);
+            
+            // 更新 path - 左侧向内凹（像╲），右侧斜切圆润
+            const path = svg.querySelector('path');
+            path.setAttribute('d', 
+                `M 30,0 L ${curveStart},0 C ${controlX1 - 10},0 ${controlX1},5 ${peakX - 8},15 L ${peakX},28 C ${peakX + 3},35 ${peakX + 2},42 ${peakX - 5},48 C ${peakX - 12},52 ${peakX - 30},52 ${curveStart},52 L 30,52 C 20,48 15,40 18,28 C 22,18 26,8 30,0 Z`
+            );
+            
+            // 更新底部阴影
+            const shadowPath = svg.querySelectorAll('path')[1];
+            if (shadowPath) {
+                shadowPath.setAttribute('d', `M 28,35 C 30,42 28,48 25,52 L ${peakX},52 C ${peakX},52 ${peakX},44 ${peakX - 5},44 C ${peakX - 12},48 ${peakX - 30},48 ${curveStart},48 L 25,48 C 28,44 29,40 28,35 Z`);
+            }
+        }
+
+        // 页面加载时初始化所有按钮的宽度
+        window.addEventListener('load', () => {
+            adjustBadgeWidth('badge1', '0元签约', '每笔另收0.02%');
+            adjustBadgeWidth('badge2', '限时特惠', '首月免费体验');
+            adjustBadgeWidth('badge3', '新用户专享福利', '开户即送100元红包');
+            adjustBadgeWidth('badge4', 'HOT', '');
+            adjustBadgeWidth('customBadge', '超值优惠', '立减50元');
+        });
+
+        // 监听回车键
+        document.getElementById('customTitle').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') updateBadge();
+        });
+        document.getElementById('customSubtitle').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') updateBadge();
+        });
+    </script>
+</body>
+</html>

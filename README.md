@@ -5,10 +5,11 @@
 ## 功能特性
 
 - 🚀 直接调用 Claude Code CLI，进程复用优化
-- 💬 持续对话支持，多轮对话性能提升 66%
-- 📡 SSE 流式消息推送
+- 💬 持续对话支持，多轮对话复用同一进程
+- 📡 SSE 流式消息推送（含 system/log/tool 等 chunk 类型）
 - 🔄 进程复用机制，避免重复启动开销
-- 🛠️ 支持自定义模型和工具
+- 🛠️ 支持自定义模型、allowedTools/disallowedTools、MCP、maxTurns
+- 🔐 权限模式对齐 happy-cli：permissionMode（default/acceptEdits/bypassPermissions/plan）、程序化 canCallTool
 - 📝 会话管理和历史记录
 - 🎯 完善的生命周期管理
 
@@ -58,7 +59,7 @@ bun run dev
 bun run start
 ```
 
-服务默认运行在 `http://0.0.0.0:3456`
+服务默认运行在 `http://0.0.0.0:3333`
 
 ### API 端点
 
@@ -78,21 +79,21 @@ Content-Type: application/json
   "model": "claude-sonnet-4.5",
   "allowedTools": ["Read", "Edit", "Bash"],
   "disallowedTools": [],
-  "envVars": {
-    "CUSTOM_VAR": "value"
-  },
-  "customSystemPrompt": "自定义系统提示",
-  "appendSystemPrompt": "追加系统提示",
+  "permissionMode": "bypassPermissions",
   "maxTurns": 100,
+  "envVars": { "CUSTOM_VAR": "value" },
   "mcpServers": {
     "my-server": {
       "command": "node",
       "args": ["/path/to/server.js"],
-      "env": {"KEY": "value"}
+      "env": { "KEY": "value" }
     }
   }
 }
 ```
+
+- `permissionMode`: `default` | `acceptEdits` | `bypassPermissions` | `plan`，默认不传时为放行。
+- 纯 HTTP 下无法使用「工具审批回调」`canCallTool`，仅程序化创建 Session 时可传；详见 [docs/ALIGNMENT.md](docs/ALIGNMENT.md)。
 
 #### 列出所有会话
 ```bash
@@ -135,22 +136,22 @@ DELETE /sessions/:sessionId
 
 ```bash
 # 1. 创建会话
-SESSION=$(curl -s -X POST http://localhost:3456/sessions \
+SESSION=$(curl -s -X POST http://localhost:3333/sessions \
   -H "Content-Type: application/json" \
   -d '{"path": "/Users/kinka/project", "initialMessage": "你好"}' | jq -r '.sessionId')
 
 echo "Session ID: $SESSION"
 
 # 2. 发送消息
-curl -X POST "http://localhost:3456/sessions/$SESSION/messages" \
+curl -X POST "http://localhost:3333/sessions/$SESSION/messages" \
   -H "Content-Type: application/json" \
   -d '{"message": "帮我查看当前目录的文件"}'
 
 # 3. 流式接收消息
-curl "http://localhost:3456/sessions/$SESSION/stream"
+curl "http://localhost:3333/sessions/$SESSION/stream"
 
 # 4. 停止会话
-curl -X POST "http://localhost:3456/sessions/$SESSION/stop"
+curl -X POST "http://localhost:3333/sessions/$SESSION/stop"
 ```
 
 ## 核心组件
@@ -213,7 +214,7 @@ session.stop();
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `PORT` | `3456` | 服务端口 |
+| `PORT` | `3333` | 服务端口 |
 | `HOST` | `0.0.0.0` | 服务主机 |
 | `DEBUG` | - | 启用调试日志 |
 
@@ -223,30 +224,38 @@ session.stop();
 cc-agents/
 ├── src/
 │   ├── index.ts                 # HTTP 服务入口
-│   ├── ClaudeAgentBackend.ts    # Claude 进程管理（进程复用）
+│   ├── sdk-types.ts             # SDK 类型（与 happy-cli 对齐）
+│   ├── ClaudeAgentBackend.ts    # Claude 进程管理、control 协议、权限
 │   ├── ClaudeSession.ts         # 会话封装
 │   ├── ClaudeSessionManager.ts  # 会话管理器
+│   ├── AgentBackend.ts          # Agent 接口类型
 │   └── logger.ts                # 日志工具
+├── docs/
+│   └── ALIGNMENT.md             # 与 happy-cli 对齐改造成果记录
 ├── package.json
 ├── tsconfig.json
 └── README.md
 ```
 
+## 与 happy-cli 对齐
+
+权限模式、工具调用 control 协议、消息类型与流式 chunk 已与 happy-cli 对齐，改造成果见 **[docs/ALIGNMENT.md](docs/ALIGNMENT.md)**。
+
 ## 技术栈
 
 - **Bun**: JavaScript 运行时
 - **Fastify**: Web 框架
-- **Zod**: 数据验证
 - **TypeScript**: 类型系统
-- **Claude Code CLI**: 直接调用官方 CLI
+- **Claude Code CLI**: 直接调用官方 CLI（stream-json 协议）
 
 ## 注意事项
 
 1. 需要预先安装 Claude Code CLI: `npm install -g @anthropic-ai/claude-code`
 2. 需要有效的 Claude API 权限
-3. 每个会话启动一个 Claude 进程，多轮对话复用该进程
+3. 每个会话启动一个 Claude 进程，多轮对话复用该进程（同一时刻仅处理一条 query，顺序无冲突）
 4. 会话消息历史保存在内存中，重启服务会丢失
 5. 进程在 session 销毁时自动清理
+6. **HTTP 下无法使用 canCallTool**：工具审批回调仅在使用 Node API 创建 Session 时可用；HTTP 下请用 `permissionMode: 'bypassPermissions'` 或接受无回调时自动 deny。详见 [docs/ALIGNMENT.md](docs/ALIGNMENT.md)。
 
 ## 性能优化
 

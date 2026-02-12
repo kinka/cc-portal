@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Multi-Agent 协作演示</title>
+  <title>Multi-Agent 迭代开发演示</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -187,6 +187,46 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .log-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .log-tab {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: #94a3b8;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .log-tab:hover {
+      border-color: #60a5fa;
+      color: #e2e8f0;
+    }
+    .log-tab.active {
+      background: linear-gradient(135deg, #60a5fa, #3b82f6);
+      color: white;
+      border-color: transparent;
+    }
+    .log-tab.agent-1-tab.active { background: linear-gradient(135deg, #f472b6, #db2777); }
+    .log-tab.agent-2-tab.active { background: linear-gradient(135deg, #60a5fa, #2563eb); }
+    .log-tab.agent-3-tab.active { background: linear-gradient(135deg, #a78bfa, #7c3aed); }
+    .log-content {
+      display: none;
+      max-height: 400px;
+      overflow-y: auto;
+      padding: 16px;
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 0.8rem;
+    }
+    .log-content.active {
+      display: block;
     }
     .log-list {
       max-height: 300px;
@@ -206,6 +246,8 @@
     .log-success { color: #22c55e; }
     .log-error { color: #ef4444; }
     .log-warn { color: #f59e0b; }
+    .log-tool { color: #22d3ee; }
+    .log-detail { color: #94a3b8; font-size: 0.75rem; padding-left: 16px; }
     .workflow-panel {
       background: #1e293b;
       border-radius: 12px;
@@ -283,12 +325,12 @@
 <body>
   <div class="container">
     <header>
-      <h1>🤖 Multi-Agent 协作演示</h1>
-      <p class="subtitle">基于 Claude Agent HTTP Service 的多智能体协作开发</p>
+      <h1>🤖 Multi-Agent 迭代开发演示</h1>
+      <p class="subtitle">架构规划 → 小步快跑迭代（开发+测试交替推进）</p>
     </header>
 
     <div class="workflow-panel">
-      <div class="workflow-title">📋 协作流程 (上下文传递)</div>
+      <div class="workflow-title">📋 协作流程：架构规划 → 多轮迭代（开发↔测试 小步快跑）</div>
       <div class="workflow-steps">
         <div class="workflow-step">
           <div class="step-box" id="step1">
@@ -301,7 +343,7 @@
         <div class="workflow-step">
           <div class="step-box" id="step2">
             <div class="step-avatar">💻</div>
-            <div class="step-name">实现者</div>
+            <div class="step-name">开发者</div>
           </div>
           <div class="step-output" id="output2">等待输入</div>
         </div>
@@ -319,7 +361,7 @@
     <div class="config-bar">
       <div class="config-item">
         <label>API 地址:</label>
-        <input type="text" id="apiUrl" value="http://localhost:3456" placeholder="http://localhost:3456">
+        <input type="text" id="apiUrl" value="http://localhost:3333" placeholder="http://localhost:3333">
       </div>
       <div class="config-item">
         <label>工作目录:</label>
@@ -416,11 +458,33 @@
 
     <div class="log-panel">
       <div class="log-header">
-        <h3>📋 系统日志</h3>
-        <button class="btn btn-secondary" onclick="clearLogs()" style="padding: 6px 12px; font-size: 0.8rem;">清空</button>
+        <div class="log-tabs">
+          <button class="log-tab active" id="tab-system" onclick="switchLogTab('system')">📋 系统日志</button>
+          <button class="log-tab agent-1-tab" id="tab-agent1" onclick="switchLogTab('agent1')">🏗️ 架构师</button>
+          <button class="log-tab agent-2-tab" id="tab-agent2" onclick="switchLogTab('agent2')">💻 开发者</button>
+          <button class="log-tab agent-3-tab" id="tab-agent3" onclick="switchLogTab('agent3')">🧪 测试者</button>
+        </div>
+        <button class="btn btn-secondary" onclick="clearAllLogs()" style="padding: 6px 12px; font-size: 0.8rem;">清空全部</button>
       </div>
-      <div class="log-list" id="logList">
+
+      <!-- 系统日志 -->
+      <div class="log-content active" id="log-system">
         <div class="log-entry">等待开始...</div>
+      </div>
+
+      <!-- 架构师日志 -->
+      <div class="log-content" id="log-agent1">
+        <div class="log-entry" style="color: #f472b6;">架构师日志将在这里显示...</div>
+      </div>
+
+      <!-- 开发者日志 -->
+      <div class="log-content" id="log-agent2">
+        <div class="log-entry" style="color: #60a5fa;">开发者日志将在这里显示...</div>
+      </div>
+
+      <!-- 测试者日志 -->
+      <div class="log-content" id="log-agent3">
+        <div class="log-entry" style="color: #a78bfa;">测试者日志将在这里显示...</div>
       </div>
     </div>
   </div>
@@ -430,13 +494,14 @@
     const WORK_DIR = () => document.getElementById('workDir').value;
 
     const agents = [
-      { id: 1, name: '架构师', sessionId: null, task: '设计系统架构', avatar: '🏗️' },
-      { id: 2, name: '实现者', sessionId: null, task: '实现核心代码', avatar: '💻' },
-      { id: 3, name: '测试者', sessionId: null, task: '编写测试用例', avatar: '🧪' }
+      { id: 1, name: '架构师', sessionId: null, task: '高层规划+迭代计划', avatar: '🏗️' },
+      { id: 2, name: '开发者', sessionId: null, task: '多轮迭代实现功能', avatar: '💻' },
+      { id: 3, name: '测试者', sessionId: null, task: '每轮跟随测试验证', avatar: '🧪' }
     ];
 
+    // 系统日志
     function log(message, type = 'info') {
-      const list = document.getElementById('logList');
+      const list = document.getElementById('log-system');
       const time = new Date().toLocaleTimeString('zh-CN');
       const div = document.createElement('div');
       div.className = 'log-entry';
@@ -445,8 +510,56 @@
       list.scrollTop = list.scrollHeight;
     }
 
+    // Agent 日志（带颜色区分）
+    function agentLog(agentIndex, message, type = 'info') {
+      const agentColors = ['#f472b6', '#60a5fa', '#a78bfa'];
+      const agentNames = ['架构师', '开发者', '测试者'];
+      const color = agentColors[agentIndex - 1];
+      const name = agentNames[agentIndex - 1];
+
+      const list = document.getElementById(`log-agent${agentIndex}`);
+      const time = new Date().toLocaleTimeString('zh-CN');
+      const div = document.createElement('div');
+
+      // 根据类型设置样式
+      if (type === 'tool') {
+        div.className = 'log-entry';
+        div.innerHTML = `<span class="log-time">${time}</span><span style="color: #22d3ee;">🔧 ${message}</span>`;
+      } else if (type === 'tool-input') {
+        div.className = 'log-entry log-detail';
+        div.innerHTML = `<span style="color: #64748b;">   📥 ${message}</span>`;
+      } else if (type === 'tool-output') {
+        div.className = 'log-entry log-detail';
+        div.innerHTML = `<span style="color: #22c55e;">   📤 ${message}</span>`;
+      } else {
+        div.className = 'log-entry';
+        div.innerHTML = `<span class="log-time">${time}</span><span style="color: ${color}; font-weight: bold;">[${name}]</span> <span class="log-${type}">${message}</span>`;
+      }
+
+      list.appendChild(div);
+      list.scrollTop = list.scrollHeight;
+    }
+
+    // 切换日志标签页
+    function switchLogTab(tabName) {
+      // 隐藏所有日志内容
+      document.querySelectorAll('.log-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.log-tab').forEach(el => el.classList.remove('active'));
+
+      // 显示选中的日志
+      document.getElementById(`log-${tabName}`).classList.add('active');
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+    }
+
     function clearLogs() {
-      document.getElementById('logList').innerHTML = '<div class="log-entry">日志已清空</div>';
+      document.getElementById('log-system').innerHTML = '<div class="log-entry">日志已清空</div>';
+    }
+
+    function clearAllLogs() {
+      document.getElementById('log-system').innerHTML = '<div class="log-entry">日志已清空</div>';
+      document.getElementById('log-agent1').innerHTML = '<div class="log-entry" style="color: #f472b6;">架构师日志已清空...</div>';
+      document.getElementById('log-agent2').innerHTML = '<div class="log-entry" style="color: #60a5fa;">开发者日志已清空...</div>';
+      document.getElementById('log-agent3').innerHTML = '<div class="log-entry" style="color: #a78bfa;">测试者日志已清空...</div>';
     }
 
     function updateAgentCard(i, status, message, progress = 0) {
@@ -521,58 +634,114 @@
       log('所有 Agents 创建完成，可以开始协作');
     }
 
+    // 迭代式协作流程 - 小步快跑
     async function startCollaboration() {
       document.getElementById('btnStart').disabled = true;
       log('开始多 Agent 协作流程...');
-      log('协作模式: 架构师 → 实现者 → 测试者 (顺序传递上下文)');
+      log('模式: 架构规划 → 多轮迭代开发+测试（小步快跑）');
 
       // 重置流程图
       updateWorkflowStep(1, 'active');
       updateWorkflowStep(2, 'pending');
       updateWorkflowStep(3, 'pending');
 
-      // 第一步：架构师设计架构
-      log('=== 第 1 步：架构师设计系统架构 ===');
-      const architectResult = await runAgentStep(0, '作为架构师，请设计任务管理 CLI 的完整架构。需要：1) 文件结构 2) 核心类设计 3) 数据持久化方案。请详细说明。', 33);
+      // ========== 第1步：架构师做高层规划（简洁） ==========
+      log('=== 第 1 步：架构师做高层规划 ===');
+      const architectPrompt = `作为架构师，请为"待办事项 CLI 工具"设计高层规划。
+
+要求：
+1. 模块划分：明确有哪几个模块（如 CLI、Service、Storage）
+2. 接口定义：核心接口的方法签名（不要实现）
+3. 数据结构：核心类型定义
+4. 迭代计划：建议分几轮迭代完成，每轮的目标
+
+请简洁输出，不要写具体实现代码。`;
+
+      const architectResult = await runAgentStep(0, architectPrompt, 20);
       if (!architectResult) {
-        log('架构师步骤失败，协作终止', 'error');
+        log('架构规划失败，协作终止', 'error');
         updateWorkflowStep(1, 'error');
         return;
       }
 
-      updateWorkflowStep(1, 'completed', '架构文档');
-      updateWorkflowStep(2, 'active');
+      updateWorkflowStep(1, 'completed', '规划完成');
       updateWorkflowArrow(1, true);
 
-      // 第二步：实现者基于架构师的设计实现代码
-      log('=== 第 2 步：实现者基于架构设计实现代码 ===');
-      log('将架构师的输出传递给实现者...');
-      const implementorPrompt = `基于以下架构设计，请实现核心代码：\n\n${architectResult}\n\n请实现：\n1. src/types.ts - 类型定义\n2. src/TaskService.ts - 任务服务类\n3. src/cli.ts - CLI 入口\n\n使用 TypeScript，确保代码符合架构设计。`;
-      const implementorResult = await runAgentStep(1, implementorPrompt, 66);
-      if (!implementorResult) {
-        log('实现者步骤失败，协作终止', 'error');
-        updateWorkflowStep(2, 'error');
-        return;
+      // ========== 多轮迭代开发 ==========
+      const iterations = [
+        { name: '骨架搭建', desc: '创建项目结构、类型定义、空接口实现' },
+        { name: '核心功能', desc: '实现增删改查、数据持久化' },
+        { name: '完善功能', desc: '添加筛选、排序、完成标记等' }
+      ];
+
+      let accumulatedCode = `【架构规划】\n${architectResult}\n\n`;
+
+      for (let round = 0; round < iterations.length; round++) {
+        const iter = iterations[round];
+        const progress = 20 + Math.floor((round + 1) * 25);
+
+        log(`=== 迭代 ${round + 1}/${iterations.length}: ${iter.name} ===`);
+        log(`目标: ${iter.desc}`);
+
+        // 开发者实现
+        updateWorkflowStep(2, 'active', `迭代${round+1}`);
+        const devPrompt = `作为开发者，请完成"${iter.name}"阶段的代码实现。
+
+背景信息：
+${accumulatedCode}
+
+当前迭代目标: ${iter.desc}
+要求：
+1. 使用 TypeScript
+2. 先读取现有代码（如果有）
+3. 实现当前迭代目标，不要过度实现
+4. 确保代码可运行
+5. 写完后验证能编译通过
+
+请开始实现。`;
+
+        const devResult = await runAgentStep(1, devPrompt, progress - 5);
+        if (!devResult) {
+          log(`迭代 ${round + 1} 开发失败`, 'error');
+          updateWorkflowStep(2, 'error');
+          return;
+        }
+
+        accumulatedCode += `\n【迭代${round+1}代码】\n${devResult}\n`;
+
+        // 测试者验证
+        updateWorkflowStep(3, 'active', `测试${round+1}`);
+        const testPrompt = `作为测试者，请验证"${iter.name}"阶段的实现。
+
+背景信息：
+${accumulatedCode.substring(0, 2000)}...
+
+当前迭代: ${iter.name} - ${iter.desc}
+要求：
+1. 先查看当前代码实现
+2. 编写针对性的测试用例（Vitest）
+3. 运行测试，确保通过
+4. 如有问题，简要说明
+
+请开始测试。`;
+
+        const testResult = await runAgentStep(2, testPrompt, progress);
+        if (!testResult) {
+          log(`迭代 ${round + 1} 测试失败`, 'error');
+          updateWorkflowStep(3, 'error');
+          return;
+        }
+
+        log(`✅ 迭代 ${round + 1} 完成: ${iter.name}`);
+        updateWorkflowStep(2, 'completed', `迭代${round+1}✓`);
+        updateWorkflowStep(3, 'completed', `测试${round+1}✓`);
       }
 
-      updateWorkflowStep(2, 'completed', '代码实现');
-      updateWorkflowStep(3, 'active');
       updateWorkflowArrow(2, true);
+      updateWorkflowStep(3, 'completed', '全部完成');
 
-      // 第三步：测试者基于实现者的代码编写测试
-      log('=== 第 3 步：测试者基于实现编写测试 ===');
-      log('将架构设计和代码实现传递给测试者...');
-      const testerPrompt = `基于以下架构设计和代码实现，请编写测试用例：\n\n【架构设计】\n${architectResult.substring(0, 1000)}...\n\n【代码实现】\n${implementorResult.substring(0, 1000)}...\n\n请编写：\n1. 单元测试 (使用 Jest/Vitest)\n2. 集成测试\n3. 测试覆盖率目标 80% 以上`;
-      const testerResult = await runAgentStep(2, testerPrompt, 100);
-      if (!testerResult) {
-        log('测试者步骤失败，协作终止', 'error');
-        updateWorkflowStep(3, 'error');
-        return;
-      }
-
-      updateWorkflowStep(3, 'completed', '测试用例');
       log('=== 🎉 多 Agent 协作完成！===');
-      log('架构设计 → 代码实现 → 测试覆盖，全流程已完成');
+      log('采用小步快跑方式，经过3轮迭代完成开发');
       document.getElementById('btnCreate').disabled = false;
     }
 
@@ -590,6 +759,7 @@
       document.getElementById(`arrow${arrow}`).className = 'workflow-arrow' + (active ? ' active' : '');
     }
 
+    // 流式运行 Agent 步骤 - 实时显示输出
     async function runAgentStep(i, prompt, progress) {
       const agent = agents[i];
       if (!agent.sessionId) {
@@ -600,33 +770,123 @@
       const startTime = Date.now();
       updateAgentCard(i + 1, 'running', '处理中...', progress - 10);
 
-      try {
-        const res = await fetch(`${API_URL()}/sessions/${agent.sessionId}/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: prompt })
-        });
+      const responseEl = document.getElementById(`response${i+1}`);
+      responseEl.style.display = 'block';
+      responseEl.textContent = '';
 
-        if (!res.ok) throw new Error('发送失败: ' + res.status);
+      return new Promise((resolve, reject) => {
+        const encodedPrompt = encodeURIComponent(prompt);
+        const url = `${API_URL()}/sessions/${agent.sessionId}/stream?message=${encodedPrompt}`;
 
-        const data = await res.json();
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-        document.getElementById(`time${i+1}`).textContent = elapsed + 's';
+        log(`Agent ${i+1} (${agent.name}): 启动流式连接...`);
 
-        // 显示响应
-        const responseEl = document.getElementById(`response${i+1}`);
-        responseEl.textContent = data.response.substring(0, 600) + (data.response.length > 600 ? '...' : '');
-        responseEl.style.display = 'block';
+        const eventSource = new EventSource(url);
+        let fullText = '';
+        let isEnded = false;
 
-        updateAgentCard(i + 1, 'completed', `步骤 ${i+1}/3 完成`, progress);
-        log(`Agent ${i+1} (${agent.name}): 步骤完成，耗时 ${elapsed}s，输出 ${data.response.length} 字符`, 'success');
+        eventSource.onopen = () => {
+          log(`Agent ${i+1} (${agent.name}): 连接已建立`);
+        };
 
-        return data.response;
-      } catch (e) {
-        updateAgentCard(i + 1, 'error', '步骤失败: ' + e.message, progress - 10);
-        log(`Agent ${i+1} 步骤失败: ${e.message}`, 'error');
-        return null;
-      }
+        eventSource.onmessage = (event) => {
+          if (event.data === '[DONE]') {
+            eventSource.close();
+            isEnded = true;
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            document.getElementById(`time${i+1}`).textContent = elapsed + 's';
+            updateAgentCard(i + 1, 'completed', `步骤 ${i+1}/3 完成`, progress);
+            log(`Agent ${i+1} (${agent.name}): 步骤完成，耗时 ${elapsed}s，输出 ${fullText.length} 字符`, 'success');
+            agentLog(i + 1, `✅ 步骤完成，耗时 ${elapsed}s，输出 ${fullText.length} 字符`);
+            resolve(fullText);
+            return;
+          }
+
+          try {
+            const chunk = JSON.parse(event.data);
+
+            if (chunk.type === 'text' && chunk.content) {
+              fullText += chunk.content;
+              const chunkText = chunk.content;
+
+              // 更新 Agent 卡片显示（最近 800 字符）
+              const displayText = fullText.length > 800
+                ? '...' + fullText.slice(-800)
+                : fullText;
+              responseEl.textContent = displayText;
+              responseEl.scrollTop = responseEl.scrollHeight;
+
+              // 写入 Agent 日志（实时追加）
+              agentLog(i + 1, chunkText, 'info');
+            } else if (chunk.type === 'tool_start') {
+              const toolMsg = `调用工具: ${chunk.toolName}`;
+              log(`Agent ${i+1} (${agent.name}): 🔧 ${toolMsg}`, 'info');
+              agentLog(i + 1, toolMsg, 'tool');
+
+              // 显示输入参数
+              if (chunk.toolInput) {
+                const inputStr = JSON.stringify(chunk.toolInput, null, 2);
+                const lines = inputStr.split('\n').slice(0, 5); // 最多显示5行
+                agentLog(i + 1, '参数:', 'tool-input');
+                lines.forEach(line => {
+                  agentLog(i + 1, line.substring(0, 100), 'tool-input'); // 每行最多100字符
+                });
+                if (inputStr.split('\n').length > 5) {
+                  agentLog(i + 1, '... (参数截断)', 'tool-input');
+                }
+              }
+            } else if (chunk.type === 'tool_output') {
+              // 显示输出结果
+              let outputStr = '';
+              if (chunk.toolOutput) {
+                if (typeof chunk.toolOutput === 'object') {
+                  if (chunk.toolOutput.content) {
+                    outputStr = String(chunk.toolOutput.content);
+                  } else if (chunk.toolOutput.output) {
+                    outputStr = String(chunk.toolOutput.output);
+                  } else {
+                    outputStr = JSON.stringify(chunk.toolOutput, null, 2);
+                  }
+                } else {
+                  outputStr = String(chunk.toolOutput);
+                }
+              }
+
+              if (outputStr) {
+                const lines = outputStr.split('\n').slice(0, 10); // 最多显示10行
+                agentLog(i + 1, '结果:', 'tool-output');
+                lines.forEach(line => {
+                  agentLog(i + 1, line.substring(0, 120), 'tool-output'); // 每行最多120字符
+                });
+                if (outputStr.split('\n').length > 10) {
+                  agentLog(i + 1, `... (${outputStr.split('\n').length - 10} 行省略)`, 'tool-output');
+                }
+              } else {
+                agentLog(i + 1, '结果: (空)', 'tool-output');
+              }
+            } else if (chunk.type === 'error') {
+              log(`Agent ${i+1} 错误: ${chunk.error}`, 'error');
+              agentLog(i + 1, `❌ 错误: ${chunk.error}`, 'error');
+            }
+          } catch (e) {
+            // 非 JSON 数据，可能是原始文本
+            const text = event.data;
+            fullText += text;
+            responseEl.textContent = fullText.length > 800
+              ? '...' + fullText.slice(-800)
+              : fullText;
+            agentLog(i + 1, text, 'info');
+          }
+        };
+
+        eventSource.onerror = (error) => {
+          if (!isEnded) {
+            eventSource.close();
+            updateAgentCard(i + 1, 'error', '连接错误', progress - 10);
+            log(`Agent ${i+1} 连接错误`, 'error');
+            reject(new Error('SSE connection error'));
+          }
+        };
+      });
     }
 
     async function fetchSessions() {

@@ -1,60 +1,90 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface, type Interface } from 'node:readline';
 import { logger } from './logger';
+import type {
+  SDKMessage,
+  SDKUserMessage,
+  SDKAssistantMessage,
+  SDKResultMessage,
+  SDKSystemMessage,
+  SDKLog,
+  PermissionResult,
+  CanCallToolCallback,
+  CanUseToolControlRequest,
+  CanUseToolControlResponse,
+  ControlCancelRequest,
+  PermissionMode,
+} from './sdk-types';
 
-/**
- * SDK Message types from Claude Code
- */
-export interface SDKMessage {
-  type: string;
-  [key: string]: unknown;
-}
+export type {
+  SDKMessage,
+  SDKUserMessage,
+  SDKAssistantMessage,
+  SDKResultMessage,
+  SDKSystemMessage,
+  PermissionResult,
+  CanCallToolCallback,
+  PermissionMode,
+} from './sdk-types';
 
-export interface SDKUserMessage extends SDKMessage {
-  type: 'user';
-  message: {
-    role: 'user';
-    content: string;
-  };
-}
-
-export interface SDKAssistantMessage extends SDKMessage {
-  type: 'assistant';
-  message: {
-    role: 'assistant';
-    content: Array<{
-      type: string;
-      text?: string;
-      id?: string;
-      name?: string;
-      input?: unknown;
-    }>;
-  };
-}
-
-export interface SDKResultMessage extends SDKMessage {
-  type: 'result';
-  subtype: 'success' | 'error_max_turns' | 'error_during_execution';
-  result?: string;
-  num_turns: number;
-  session_id: string;
-  is_error: boolean;
-}
-
-export interface SDKSystemMessage extends SDKMessage {
-  type: 'system';
-  subtype: string;
-  session_id?: string;
-  model?: string;
-}
-
+/** Stream chunk types aligned with happy-cli message handling */
 export interface StreamChunk {
-  type: 'text' | 'tool_start' | 'tool_end' | 'tool_output' | 'error' | 'done';
+  type: 'text' | 'tool_start' | 'tool_end' | 'tool_output' | 'error' | 'done' | 'system' | 'log';
   content?: string;
   toolName?: string;
   toolInput?: unknown;
   toolOutput?: unknown;
+  toolUseId?: string;
   error?: string;
+  /** system init */
+  subtype?: string;
+  session_id?: string;
+  model?: string;
+  cwd?: string;
+  tools?: string[];
+  /** log */
+  level?: 'debug' | 'info' | 'warn' | 'error';
+  message?: string;
+}
+
+/** Async queue: read loop pushes, query/queryStream pull */
+class AsyncMessageQueue {
+  private queue: SDKMessage[] = [];
+  private waiters: Array<(msg: SDKMessage) => void> = [];
+
+  enqueue(msg: SDKMessage): void {
+    if (this.waiters.length > 0) {
+      const w = this.waiters.shift()!;
+      w(msg);
+    } else {
+      this.queue.push(msg);
+    }
+  }
+
+  async next(): Promise<SDKMessage> {
+    if (this.queue.length > 0) {
+      return this.queue.shift()!;
+    }
+    return new Promise<SDKMessage>((resolve) => {
+      this.waiters.push(resolve);
+    });
+  }
+}
+
+export interface ClaudeAgentBackendOptions {
+  cwd: string;
+  claudeSessionId: string;
+  model?: string;
+  allowedTools?: string[];
+  disallowedTools?: string[];
+  /** @default 'bypassPermissions' - use 'default' or 'acceptEdits' with canCallTool for approval */
+  permissionMode?: PermissionMode;
+  /** When permissionMode is not bypassPermissions, tool calls are approved via this callback. If missing, tool calls are denied. */
+  canCallTool?: CanCallToolCallback;
+  /** @deprecated use permissionMode: 'bypassPermissions' instead */
+  bypassPermission?: boolean;
+  mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
+  maxTurns?: number;
 }
 
 export class ClaudeAgentBackend {
@@ -62,37 +92,167 @@ export class ClaudeAgentBackend {
   private claudeSessionId: string;
   private model?: string;
   private allowedTools?: string[];
+  private disallowedTools?: string[];
+  private permissionMode: PermissionMode;
+  private canCallTool?: CanCallToolCallback;
+  private mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
+  private maxTurns?: number;
+
   private child?: ChildProcessWithoutNullStreams;
   private rl?: Interface;
   private isInitialized = false;
+  private messageQueue = new AsyncMessageQueue();
+  private readLoopStarted = false;
+  private cancelControllers = new Map<string, AbortController>();
+  /** Only one query or queryStream at a time */
+  private consumerLock: Promise<void> = Promise.resolve();
+  private releaseLock: (() => void) | null = null;
 
-  constructor(options: {
-    cwd: string;
-    claudeSessionId: string;
-    model?: string;
-    allowedTools?: string[];
-  }) {
+  constructor(options: ClaudeAgentBackendOptions) {
     this.cwd = options.cwd;
     this.claudeSessionId = options.claudeSessionId;
     this.model = options.model;
     this.allowedTools = options.allowedTools;
+    this.disallowedTools = options.disallowedTools;
+    this.canCallTool = options.canCallTool;
+    this.mcpServers = options.mcpServers;
+    this.maxTurns = options.maxTurns;
+    // Backward compat: bypassPermission true => bypassPermissions
+    if (options.bypassPermission !== undefined) {
+      this.permissionMode = options.bypassPermission ? 'bypassPermissions' : 'default';
+    } else {
+      this.permissionMode = options.permissionMode ?? 'bypassPermissions';
+    }
   }
 
-  // 初始化进程（只调用一次）
+  private acquireLock(): Promise<void> {
+    const prev = this.consumerLock;
+    let release: () => void;
+    this.consumerLock = new Promise<void>((r) => {
+      release = r;
+    });
+    this.releaseLock = release!;
+    return prev;
+  }
+
+  private releaseConsumerLock(): void {
+    if (this.releaseLock) {
+      this.releaseLock();
+      this.releaseLock = null;
+    }
+  }
+
+  private async handleControlRequest(request: CanUseToolControlRequest): Promise<void> {
+    if (!this.child?.stdin) return;
+    const controller = new AbortController();
+    this.cancelControllers.set(request.request_id, controller);
+
+    try {
+      let response: PermissionResult;
+      if (request.request.subtype === 'can_use_tool') {
+        if (this.canCallTool) {
+          response = await this.canCallTool(request.request.tool_name, request.request.input, {
+            signal: controller.signal,
+          });
+        } else {
+          response = { behavior: 'deny', message: 'No canCallTool callback configured' };
+        }
+      } else {
+        throw new Error('Unsupported control request subtype: ' + (request.request as { subtype?: string }).subtype);
+      }
+
+      const controlResponse: CanUseToolControlResponse = {
+        type: 'control_response',
+        response: {
+          subtype: 'success',
+          request_id: request.request_id,
+          response,
+        },
+      };
+      this.child.stdin.write(JSON.stringify(controlResponse) + '\n');
+    } catch (err) {
+      const controlError: CanUseToolControlResponse = {
+        type: 'control_response',
+        response: {
+          subtype: 'error',
+          request_id: request.request_id,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      };
+      this.child.stdin!.write(JSON.stringify(controlError) + '\n');
+    } finally {
+      this.cancelControllers.delete(request.request_id);
+    }
+  }
+
+  private startReadLoop(): void {
+    if (!this.rl || !this.child || this.readLoopStarted) return;
+    this.readLoopStarted = true;
+
+    const processLine = (line: string) => {
+      if (!line.trim()) return;
+      try {
+        const msg = JSON.parse(line) as SDKMessage & { type: string; request_id?: string; request?: { subtype: string } };
+
+        if (msg.type === 'control_response') {
+          // Handled by pending handlers if we add request/response matching later; for can_use_tool we reply directly
+          return;
+        }
+        if (msg.type === 'control_request') {
+          this.handleControlRequest(msg as unknown as CanUseToolControlRequest);
+          return;
+        }
+        if (msg.type === 'control_cancel_request') {
+          const ctrl = this.cancelControllers.get((msg as unknown as ControlCancelRequest).request_id);
+          if (ctrl) {
+            ctrl.abort();
+            this.cancelControllers.delete((msg as unknown as ControlCancelRequest).request_id);
+          }
+          return;
+        }
+
+        this.messageQueue.enqueue(msg);
+      } catch {
+        logger.debug(`[Claude stdout] ${line}`);
+      }
+    };
+
+    this.rl.on('line', processLine);
+  }
+
   private async initialize(): Promise<void> {
-    if (this.isInitialized) return;
+    if (this.isInitialized && this.isProcessAlive()) return;
+
+    // If process died, clean up and reinitialize
+    if (this.isInitialized && !this.isProcessAlive()) {
+      logger.warn('[ClaudeAgent] Process died, reinitializing...');
+      this.rl?.close();
+      this.isInitialized = false;
+      this.readLoopStarted = false;
+    }
 
     const args = [
-      '--output-format', 'stream-json',
-      '--input-format', 'stream-json',
+      '--output-format',
+      'stream-json',
+      '--input-format',
+      'stream-json',
       '--verbose',
-      '--session-id', this.claudeSessionId
+      '--session-id',
+      this.claudeSessionId,
+      '--permission-mode',
+      this.permissionMode,
     ];
 
     if (this.model) args.push('--model', this.model);
     if (this.allowedTools?.length) args.push('--allowedTools', this.allowedTools.join(','));
+    if (this.disallowedTools?.length) args.push('--disallowedTools', this.disallowedTools.join(','));
+    if (this.maxTurns != null) args.push('--max-turns', String(this.maxTurns));
+    if (this.canCallTool) args.push('--permission-prompt-tool', 'stdio');
+    if (this.mcpServers && Object.keys(this.mcpServers).length > 0) {
+      args.push('--mcp-config', JSON.stringify({ mcpServers: this.mcpServers }));
+    }
 
-    logger.info(`[ClaudeAgent] Initializing: claude ${args.slice(0, 4).join(' ')}...`);
+    logger.info(`[ClaudeAgent] Initializing: claude ${args.slice(0, 6).join(' ')}...`);
 
     this.child = spawn('claude', args, {
       cwd: this.cwd,
@@ -102,241 +262,168 @@ export class ClaudeAgentBackend {
 
     this.rl = createInterface({ input: this.child.stdout! });
 
-    // 处理进程错误
     this.child.on('error', (error) => {
       logger.error(`[ClaudeAgent] Process error: ${error.message}`);
       this.isInitialized = false;
     });
 
-    // 处理进程退出
     this.child.on('close', (code) => {
       logger.info(`[ClaudeAgent] Process exited with code ${code}`);
       this.isInitialized = false;
       this.rl?.close();
     });
 
-    // 处理 stderr
     this.child.stderr!.on('data', (data) => {
       logger.debug(`[Claude stderr] ${data.toString()}`);
     });
 
     this.isInitialized = true;
+    this.startReadLoop();
   }
 
   async query(message: string): Promise<string> {
     await this.initialize();
+    await this.acquireLock();
 
-    return new Promise((resolve, reject) => {
-      if (!this.child || !this.rl) {
-        reject(new Error('Claude process not initialized'));
-        return;
+    try {
+      if (!this.child?.stdin) {
+        throw new Error('Claude process not initialized');
       }
 
-      let fullText = '';
-      let resultMessage: SDKResultMessage | null = null;
-      let timeoutHandle: NodeJS.Timeout;
-
-      const lineHandler = (line: string) => {
-        if (!line.trim()) return;
-
-        try {
-          const msg = JSON.parse(line) as SDKMessage;
-
-          switch (msg.type) {
-            case 'assistant': {
-              const assistantMsg = msg as SDKAssistantMessage;
-              for (const content of assistantMsg.message.content) {
-                if (content.type === 'text' && content.text) {
-                  fullText += content.text;
-                }
-              }
-              break;
-            }
-
-            case 'result': {
-              resultMessage = msg as SDKResultMessage;
-              cleanup();
-
-              if (resultMessage.is_error) {
-                reject(new Error(`Claude error: ${resultMessage.result || 'Unknown error'}`));
-              } else {
-                resolve(fullText.trim() || resultMessage.result || '');
-              }
-              break;
-            }
-
-            case 'system': {
-              const systemMsg = msg as SDKSystemMessage;
-              logger.debug(`[Claude] System: ${systemMsg.subtype}`);
-              break;
-            }
-
-            case 'log': {
-              break;
-            }
-
-            default:
-              logger.debug(`[Claude] Unknown message type: ${msg.type}`);
-          }
-        } catch (e) {
-          logger.debug(`[Claude stdout] ${line}`);
-        }
-      };
-
-      const cleanup = () => {
-        clearTimeout(timeoutHandle);
-        this.rl?.off('line', lineHandler);
-      };
-
-      // 监听输出
-      this.rl.on('line', lineHandler);
-
-      // 发送用户消息
       const userMessage: SDKUserMessage = {
         type: 'user',
-        message: {
-          role: 'user',
-          content: message
-        }
+        message: { role: 'user', content: message },
       };
-      this.child.stdin!.write(JSON.stringify(userMessage) + '\n');
+      this.child.stdin.write(JSON.stringify(userMessage) + '\n');
 
-      // 5分钟超时
-      timeoutHandle = setTimeout(() => {
-        cleanup();
-        reject(new Error('Query timeout after 300s'));
-      }, 300000);
-    });
-  }
+      let fullText = '';
+      const timeoutMs = 300_000;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Query timeout after 300s')), timeoutMs);
+      });
 
-  // 流式查询 - 实时返回 chunks
-  async *queryStream(message: string): AsyncGenerator<StreamChunk> {
-    await this.initialize();
+      const nextWithTimeout = () => Promise.race([this.messageQueue.next(), timeoutPromise]);
 
-    if (!this.child || !this.rl) {
-      yield { type: 'error', error: 'Claude process not initialized' };
-      return;
-    }
+      while (true) {
+        const msg = await nextWithTimeout();
 
-    let resultMessage: SDKResultMessage | null = null;
-    const buffer: StreamChunk[] = [];
-    let resolveNext: (() => void) | null = null;
-    let isDone = false;
-    let timeoutHandle: NodeJS.Timeout;
-
-    const lineHandler = (line: string) => {
-      if (!line.trim()) return;
-
-      try {
-        const msg = JSON.parse(line) as SDKMessage;
-
-        switch (msg.type) {
-          case 'assistant': {
-            const assistantMsg = msg as SDKAssistantMessage;
-            for (const content of assistantMsg.message.content) {
-              if (content.type === 'text' && content.text) {
-                buffer.push({ type: 'text', content: content.text });
-              } else if (content.type === 'tool_use' && content.name) {
-                buffer.push({
-                  type: 'tool_start',
-                  toolName: content.name,
-                  toolInput: content.input
-                });
-              } else if (content.type === 'tool_result') {
-                buffer.push({
-                  type: 'tool_output',
-                  toolOutput: content
-                });
-              }
-            }
-            if (resolveNext) {
-              resolveNext();
-              resolveNext = null;
-            }
-            break;
+        if (msg.type === 'assistant') {
+          const assistantMsg = msg as SDKAssistantMessage;
+          for (const content of assistantMsg.message.content) {
+            if (content.type === 'text' && content.text) fullText += content.text;
           }
-
-          case 'result': {
-            resultMessage = msg as SDKResultMessage;
-            if (resultMessage.is_error) {
-              buffer.push({ type: 'error', error: resultMessage.result || 'Unknown error' });
-            }
-            buffer.push({ type: 'done' });
-            isDone = true;
-            if (resolveNext) resolveNext();
-            break;
+        } else if (msg.type === 'result') {
+          const resultMsg = msg as SDKResultMessage;
+          if (resultMsg.is_error) {
+            throw new Error(`Claude error: ${resultMsg.result ?? 'Unknown error'}`);
           }
-
-          case 'system': {
-            const systemMsg = msg as SDKSystemMessage;
-            logger.debug(`[Claude] System: ${systemMsg.subtype}`);
-            break;
-          }
-
-          case 'log': {
-            break;
-          }
-
-          default:
-            logger.debug(`[Claude] Unknown message type: ${msg.type}`);
-        }
-      } catch (e) {
-        logger.debug(`[Claude stdout] ${line}`);
-      }
-    };
-
-    const cleanup = () => {
-      clearTimeout(timeoutHandle);
-      this.rl?.off('line', lineHandler);
-    };
-
-    // 监听输出
-    this.rl.on('line', lineHandler);
-
-    // 发送用户消息
-    const userMessage: SDKUserMessage = {
-      type: 'user',
-      message: {
-        role: 'user',
-        content: message
-      }
-    };
-    this.child.stdin!.write(JSON.stringify(userMessage) + '\n');
-
-    // 超时处理 - 5分钟
-    timeoutHandle = setTimeout(() => {
-      buffer.push({ type: 'error', error: 'Timeout after 300s' });
-      isDone = true;
-      if (resolveNext) resolveNext();
-    }, 300000);
-
-    // 生成器循环
-    try {
-      while (!isDone || buffer.length > 0) {
-        if (buffer.length > 0) {
-          yield buffer.shift()!;
-        } else {
-          await new Promise<void>((resolve) => {
-            resolveNext = resolve;
-          });
+          return (fullText.trim() || resultMsg.result) ?? '';
         }
       }
     } finally {
-      cleanup();
+      this.releaseConsumerLock();
     }
   }
 
-  // 销毁进程
+  async *queryStream(message: string): AsyncGenerator<StreamChunk> {
+    await this.initialize();
+    await this.acquireLock();
+
+    try {
+      if (!this.child?.stdin) {
+        yield { type: 'error', error: 'Claude process not initialized' };
+        return;
+      }
+
+      const userMessage: SDKUserMessage = {
+        type: 'user',
+        message: { role: 'user', content: message },
+      };
+      this.child.stdin.write(JSON.stringify(userMessage) + '\n');
+
+      const timeoutMs = 300_000;
+      let timeoutHandle: ReturnType<typeof setTimeout>;
+      const nextWithTimeout = (): Promise<SDKMessage> =>
+        Promise.race([
+          this.messageQueue.next(),
+          new Promise<SDKMessage>((_, reject) => {
+            timeoutHandle = setTimeout(() => reject(new Error('Timeout after 300s')), timeoutMs);
+          }),
+        ]).finally(() => clearTimeout(timeoutHandle!));
+
+      while (true) {
+        const msg = await nextWithTimeout();
+
+        if (msg.type === 'system') {
+          const sys = msg as SDKSystemMessage;
+          yield {
+            type: 'system',
+            subtype: sys.subtype,
+            session_id: sys.session_id,
+            model: sys.model,
+            cwd: sys.cwd,
+            tools: sys.tools,
+          };
+        } else if (msg.type === 'log') {
+          const logMsg = msg as SDKLog;
+          yield {
+            type: 'log',
+            level: logMsg.log.level,
+            message: logMsg.log.message,
+          };
+        } else if (msg.type === 'assistant') {
+          const assistantMsg = msg as SDKAssistantMessage;
+          for (const content of assistantMsg.message.content) {
+            if (content.type === 'text' && content.text) {
+              yield { type: 'text', content: content.text };
+            } else if (content.type === 'tool_use' && content.name) {
+              yield {
+                type: 'tool_start',
+                toolName: content.name,
+                toolInput: content.input,
+                toolUseId: content.id,
+              };
+            } else if (content.type === 'tool_result') {
+              yield { type: 'tool_output', toolOutput: content, toolUseId: (content as { tool_use_id?: string }).tool_use_id };
+            }
+          }
+        } else if (msg.type === 'result') {
+          const resultMsg = msg as SDKResultMessage;
+          if (resultMsg.is_error) {
+            yield { type: 'error', error: resultMsg.result ?? 'Unknown error' };
+          }
+          yield { type: 'done' };
+          return;
+        }
+      }
+    } finally {
+      this.releaseConsumerLock();
+    }
+  }
+
+  isProcessAlive(): boolean {
+    if (!this.child) return false;
+    try {
+      // Check if process is still running (kill -0 doesn't actually kill)
+      process.kill(this.child.pid!, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   destroy(): void {
+    for (const ctrl of this.cancelControllers.values()) ctrl.abort();
+    this.cancelControllers.clear();
     if (this.child && !this.child.killed) {
       logger.info('[ClaudeAgent] Destroying process');
       this.child.kill('SIGTERM');
     }
     this.rl?.close();
     this.isInitialized = false;
+    this.readLoopStarted = false;
   }
 
-  // 兼容旧的 cancel 方法
   cancel(): void {
     this.destroy();
   }

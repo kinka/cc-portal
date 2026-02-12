@@ -7,7 +7,13 @@ export interface CreateSessionOptions {
   initialMessage?: string;
   model?: string;
   allowedTools?: string[];
+  disallowedTools?: string[];
+  permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
+  mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
+  maxTurns?: number;
   envVars?: Record<string, string>;
+  /** @deprecated use permissionMode: 'bypassPermissions' */
+  bypassPermission?: boolean;
 }
 
 export class ClaudeSessionManager {
@@ -21,8 +27,13 @@ export class ClaudeSessionManager {
       path: options.path,
       model: options.model,
       allowedTools: options.allowedTools,
+      disallowedTools: options.disallowedTools,
+      permissionMode: options.permissionMode,
+      mcpServers: options.mcpServers,
+      maxTurns: options.maxTurns,
       envVars: options.envVars,
       initialMessage: options.initialMessage,
+      bypassPermission: options.bypassPermission,
     });
 
     this.sessions.set(id, session);

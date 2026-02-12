@@ -1,5 +1,5 @@
 {
-  "name": "claude-agent-http-service",
+  "name": "cc-agents",
   "version": "0.1.0",
   "description": "HTTP service for remote Claude Code CLI control with persistent conversations",
   "type": "module",

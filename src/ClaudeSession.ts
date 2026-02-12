@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { ClaudeAgentBackend, type StreamChunk } from './ClaudeAgentBackend';
+import type { CanCallToolCallback, PermissionMode } from './sdk-types';
 import { logger } from './logger';
 
 export interface ClaudeSessionOptions {
@@ -8,8 +9,17 @@ export interface ClaudeSessionOptions {
   path: string;
   model?: string;
   allowedTools?: string[];
+  disallowedTools?: string[];
+  /** default | acceptEdits | bypassPermissions | plan. Default bypassPermissions for backward compat. */
+  permissionMode?: PermissionMode;
+  /** Required when permissionMode is not bypassPermissions; used for programmatic approval. */
+  canCallTool?: CanCallToolCallback;
+  mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
+  maxTurns?: number;
   envVars?: Record<string, string>;
   initialMessage?: string;
+  /** @deprecated use permissionMode: 'bypassPermissions' */
+  bypassPermission?: boolean;
 }
 
 export interface Message {
@@ -40,6 +50,12 @@ export class ClaudeSession extends EventEmitter {
       claudeSessionId: this.claudeSessionId,
       model: options.model,
       allowedTools: options.allowedTools,
+      disallowedTools: options.disallowedTools,
+      permissionMode: options.permissionMode,
+      canCallTool: options.canCallTool,
+      mcpServers: options.mcpServers,
+      maxTurns: options.maxTurns,
+      bypassPermission: options.bypassPermission,
     });
 
     // Send initial message if provided
