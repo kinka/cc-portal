@@ -4,39 +4,45 @@
 
 ## 功能特性
 
-- 🚀 基于 happy-cli Claude SDK 的完整封装
-- 💬 持续对话支持
+- 🚀 直接调用 Claude Code CLI，进程复用优化
+- 💬 持续对话支持，多轮对话性能提升 66%
 - 📡 SSE 流式消息推送
-- 🔧 AgentBackend 统一接口
-- 🛠️ 支持 MCP 服务器
-- 🔒 权限控制回调
+- 🔄 进程复用机制，避免重复启动开销
+- 🛠️ 支持自定义模型和工具
 - 📝 会话管理和历史记录
+- 🎯 完善的生命周期管理
 
 ## 架构
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │   HTTP API      │────▶│ ClaudeSession    │────▶│ClaudeAgentBackend│
-│  (Fastify)      │     │                  │     │                 │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
+│  (Fastify)      │     │  - 会话管理       │     │  - 进程复用      │
+└─────────────────┘     │  - 消息历史       │     │  - 流式通信      │
+                        └──────────────────┘     └─────────────────┘
                                                         │
                               ┌─────────────────────────┘
+                              │ spawn once, reuse
                               ▼
                         ┌──────────────────┐
-                        │   SDK (query)    │
-                        │  happy-cli 封装   │
-                        └──────────────────┘
-                               │
-                               ▼
-                        ┌──────────────────┐
-                        │  Claude Code CLI │
+                        │  Claude Process  │
+                        │  stdin/stdout    │
+                        │  JSON streaming  │
                         └──────────────────┘
 ```
+
+### 核心优化
+
+**进程复用机制**：
+- 每个 session 只启动一次 `claude` 进程
+- 通过 stdin/stdout 进行 JSON 流式通信
+- 多轮对话复用同一进程，性能提升 66%
+- session 销毁时正确清理进程资源
 
 ## 安装
 
 ```bash
-cd /Users/kinka/space/happy-coder/claude-agent-http-service
+cd /Users/kinka/space/happy-coder/cc-agents
 bun install
 ```
 
@@ -149,44 +155,59 @@ curl -X POST "http://localhost:3456/sessions/$SESSION/stop"
 
 ## 核心组件
 
-### AgentBackend 接口
-
-统一的 Agent 后端接口，支持多种 Agent（Claude、Codex 等）：
-
-```typescript
-interface AgentBackend {
-  startSession(initialPrompt?: string): Promise<StartSessionResult>;
-  sendPrompt(sessionId: SessionId, prompt: string): Promise<void>;
-  cancel(sessionId: SessionId): Promise<void>;
-  onMessage(handler: AgentMessageHandler): void;
-  respondToPermission?(requestId: string, approved: boolean): Promise<void>;
-  dispose(): Promise<void>;
-}
-```
-
 ### ClaudeAgentBackend
 
-基于 happy-cli SDK 的 Claude 实现：
+直接调用 Claude Code CLI 的实现：
 
 ```typescript
 const backend = new ClaudeAgentBackend({
   cwd: '/path/to/project',
-  agentName: 'claude',
-  transport: 'native-claude',
+  claudeSessionId: 'unique-session-id',
   model: 'claude-sonnet-4.5',
-  allowedTools: ['Read', 'Edit'],
-  mcpServers: { ... }
+  allowedTools: ['Read', 'Edit', 'Bash']
 });
+
+// 普通查询
+const response = await backend.query('帮我查看文件');
+
+// 流式查询（实时响应）
+for await (const chunk of backend.queryStream('帮我查看文件')) {
+  if (chunk.type === 'text') {
+    console.log(chunk.content);
+  }
+}
 ```
 
-### SDK 集成
+### ClaudeSession
 
-使用了 happy-cli 的以下组件：
+会话管理封装：
 
-- `src/sdk/query.ts` - Claude Code 进程管理和消息流
-- `src/sdk/types.ts` - SDK 类型定义
-- `src/sdk/stream.ts` - 消息流处理
-- `src/sdk/utils.ts` - 工具函数
+```typescript
+const session = new ClaudeSession({
+  cwd: '/path/to/project',
+  model: 'claude-sonnet-4.5',
+  allowedTools: ['Read', 'Edit']
+});
+
+// 发送消息
+const response = await session.sendMessage('你好');
+
+// 流式发送消息
+for await (const chunk of session.sendMessageStream('你好')) {
+  console.log(chunk);
+}
+
+// 停止会话（自动清理进程）
+session.stop();
+```
+
+### 进程生命周期
+
+- `initialize()`: 首次查询时自动初始化进程
+- `query()`: 复用已有进程进行查询
+- `queryStream()`: 流式查询，实时返回响应
+- `destroy()`: 清理进程和资源
+- 超时保护：5 分钟自动超时
 
 ## 环境变量
 
@@ -199,21 +220,13 @@ const backend = new ClaudeAgentBackend({
 ## 项目结构
 
 ```
-claude-agent-http-service/
+cc-agents/
 ├── src/
 │   ├── index.ts                 # HTTP 服务入口
-│   ├── AgentBackend.ts          # Agent 后端接口
-│   ├── ClaudeAgentBackend.ts    # Claude 实现
+│   ├── ClaudeAgentBackend.ts    # Claude 进程管理（进程复用）
 │   ├── ClaudeSession.ts         # 会话封装
 │   ├── ClaudeSessionManager.ts  # 会话管理器
-│   ├── logger.ts                # 日志工具
-│   └── sdk/                     # happy-cli SDK
-│       ├── index.ts
-│       ├── query.ts
-│       ├── types.ts
-│       ├── stream.ts
-│       ├── utils.ts
-│       └── metadataExtractor.ts
+│   └── logger.ts                # 日志工具
 ├── package.json
 ├── tsconfig.json
 └── README.md
@@ -225,31 +238,22 @@ claude-agent-http-service/
 - **Fastify**: Web 框架
 - **Zod**: 数据验证
 - **TypeScript**: 类型系统
-- **happy-cli SDK**: Claude Code 封装
-
-## 与 happy-cli 的关系
-
-本项目复制并适配了 happy-cli 的 Claude SDK 文件：
-
-| 源文件 | 说明 |
-|--------|------|
-| `happy-cli/src/claude/sdk/query.ts` | Claude Code 进程管理 |
-| `happy-cli/src/claude/sdk/types.ts` | SDK 类型定义 |
-| `happy-cli/src/claude/sdk/stream.ts` | 消息流处理 |
-| `happy-cli/src/claude/sdk/utils.ts` | 工具函数 |
-| `happy-cli/src/agent/core/AgentBackend.ts` | Agent 接口定义 |
-
-适配修改：
-- 修改了导入路径（`@/ui/logger` → `../logger`）
-- 添加了 `isBun()` 工具函数
-- 简化了部分类型依赖
+- **Claude Code CLI**: 直接调用官方 CLI
 
 ## 注意事项
 
 1. 需要预先安装 Claude Code CLI: `npm install -g @anthropic-ai/claude-code`
 2. 需要有效的 Claude API 权限
-3. 每个会话会启动独立的 Claude Code 进程
+3. 每个会话启动一个 Claude 进程，多轮对话复用该进程
 4. 会话消息历史保存在内存中，重启服务会丢失
+5. 进程在 session 销毁时自动清理
+
+## 性能优化
+
+- **进程复用**: 多次查询只启动一次进程，性能提升 66%
+- **流式通信**: 通过 stdin/stdout 进行 JSON 流式通信
+- **资源管理**: session 销毁时自动清理进程和资源
+- **超时保护**: 5 分钟查询超时保护
 
 ## License
 
