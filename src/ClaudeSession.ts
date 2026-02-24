@@ -22,6 +22,8 @@ export interface ClaudeSessionOptions {
   initialMessage?: string;
   /** @deprecated use permissionMode: 'bypassPermissions' */
   bypassPermission?: boolean;
+  /** Whether this is a brand new session (--session-id) or resuming existing (--resume). Default true. */
+  isNewSession?: boolean;
 }
 
 /** One pending tool approval request (HTTP flow). */
@@ -89,6 +91,7 @@ export class ClaudeSession extends EventEmitter {
       mcpServers: options.mcpServers,
       maxTurns: options.maxTurns,
       bypassPermission: options.bypassPermission,
+      isNewSession: options.isNewSession,
     });
 
     // Send initial message if provided

@@ -143,6 +143,11 @@ export class ClaudeAgentBackend extends EventEmitter {
     this.maxTurns = options.maxTurns;
     this.isNewSession = options.isNewSession ?? true;
     // Backward compat: bypassPermission true => bypassPermissions
+    if (options.bypassPermission !== undefined) {
+      this.permissionMode = options.bypassPermission ? 'bypassPermissions' : 'default';
+    } else {
+      this.permissionMode = options.permissionMode ?? 'bypassPermissions';
+    }
   }
 
   private acquireLock(): Promise<void> {
@@ -298,7 +303,7 @@ export class ClaudeAgentBackend extends EventEmitter {
       this.readLoopStarted = false;
     }
 
-    const baseArgs = [
+    const args = [
       '--output-format',
       'stream-json',
       '--input-format',
@@ -306,76 +311,57 @@ export class ClaudeAgentBackend extends EventEmitter {
       '--verbose',
     ];
 
-    if (this.permissionMode) baseArgs.push('--permission-mode', this.permissionMode);
-    if (this.model) baseArgs.push('--model', this.model);
-    if (this.allowedTools?.length) baseArgs.push('--allowedTools', this.allowedTools.join(','));
-    if (this.disallowedTools?.length) baseArgs.push('--disallowedTools', this.disallowedTools.join(','));
-    if (this.maxTurns != null) baseArgs.push('--max-turns', String(this.maxTurns));
-    if (this.canCallTool) baseArgs.push('--permission-prompt-tool', 'stdio');
+    if (this.permissionMode) args.push('--permission-mode', this.permissionMode);
+    if (this.model) args.push('--model', this.model);
+    if (this.allowedTools?.length) args.push('--allowedTools', this.allowedTools.join(','));
+    if (this.disallowedTools?.length) args.push('--disallowedTools', this.disallowedTools.join(','));
+    if (this.maxTurns != null) args.push('--max-turns', String(this.maxTurns));
+    if (this.canCallTool) args.push('--permission-prompt-tool', 'stdio');
     if (this.mcpServers && Object.keys(this.mcpServers).length > 0) {
-      baseArgs.push('--mcp-config', JSON.stringify({ mcpServers: this.mcpServers }));
+      args.push('--mcp-config', JSON.stringify({ mcpServers: this.mcpServers }));
     }
 
-    // Try --resume first (existing session), fall back to --session-id (new session)
-    const strategies: Array<{ flag: string; label: string }> = [
-      { flag: '--resume', label: 'resume' },
-      { flag: '--session-id', label: 'new' },
-    ];
-
-    for (const strategy of strategies) {
-      const args = [...baseArgs, strategy.flag, this.claudeSessionId];
-
-      // Kill any lingering process that holds this session
-      this.killExistingProcessForSession();
+    // --session-id for new sessions, --resume for existing ones
+    const sessionFlag = this.isNewSession ? '--session-id' : '--resume';
+    args.push(sessionFlag, this.claudeSessionId);
+    this.killExistingProcessForSession();
       await new Promise(resolve => setTimeout(resolve, 500));
-
-      log.info({ args: args.slice(0, 8), strategy: strategy.label }, 'Initializing Claude process');
+    log.info({ args: args.slice(0, 8), sessionFlag }, 'Initializing Claude process');
       this.child = spawn('claude', args, {
-        cwd: this.cwd,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: process.env,
+      cwd: this.cwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: process.env,
       }) as ChildProcessWithoutNullStreams;
-      this.rl = createInterface({ input: this.child.stdout! });
+    this.rl = createInterface({ input: this.child.stdout! });
       this.child.on('error', (error) => {
-        log.error({ error: error.message }, 'Process error');
-        this.isInitialized = false;
-      });
+      log.error({ error: error.message }, 'Process error');
+      this.isInitialized = false;
+    });
       this.child.on('close', (code) => {
-        log.info({ code }, 'Process exited');
-        this.isInitialized = false;
-        this.rl?.close();
-      });
-      let stderrBuffer = '';
-      this.child.stderr!.on('data', (data) => {
-        const text = data.toString();
-        stderrBuffer += text;
-        log.debug({ stderr: text }, 'Claude stderr');
-      });
-
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      if (!this.child.killed && this.child.exitCode === null) {
-        this.isInitialized = true;
-        this.startReadLoop();
-        return;
-      }
-
-      // Process exited immediately
-      const exitCode = this.child?.exitCode;
-      const errorMatch = stderrBuffer.match(/Error:\s*(.+)/);
-      const errorMsg = errorMatch ? errorMatch[1].trim() : `Process exited with code ${exitCode}`;
+      log.info({ code }, 'Process exited');
+      this.isInitialized = false;
       this.rl?.close();
-      this.child = undefined;
-      this.rl = undefined;
-      // --resume fails for new sessions (no conversation found); --session-id fails for existing ones (already in use)
-      // In either case, try the other strategy
-      if (strategy.flag === '--resume' || (/already in use/i.test(errorMsg) && strategy.flag === '--session-id')) {
-        log.info({ sessionId: this.claudeSessionId, strategy: strategy.label }, 'Strategy failed, trying alternative');
-        continue;
-      }
+    });
+      let stderrBuffer = '';
+    this.child.stderr!.on('data', (data) => {
+      const text = data.toString();
+      stderrBuffer += text;
+      log.debug({ stderr: text }, 'Claude stderr');
+    });
 
-      log.error({ exitCode: exitCode ?? 1, stderr: stderrBuffer, strategy: strategy.label }, 'Claude process exited immediately');
-      throw new Error(`Failed to start Claude: ${errorMsg}`);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+      if (!this.child.killed && this.child.exitCode === null) {
+      this.isInitialized = true;
+      this.startReadLoop();
+      return;
     }
+      const exitCode = this.child?.exitCode;
+    const errorMatch = stderrBuffer.match(/Error:\s*(.+)/);
+    const errorMsg = errorMatch ? errorMatch[1].trim() : `Process exited with code ${exitCode}`;
+    this.rl?.close();
+    this.child = undefined;
+      this.rl = undefined;
+    throw new Error(`Failed to start Claude: ${errorMsg}`);
   }
 
   async query(message: string): Promise<string> {

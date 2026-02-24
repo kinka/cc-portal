@@ -230,6 +230,7 @@ export class ClaudeSessionManager {
       id: metadata.id,
       path: metadata.path,
       model: metadata.model,
+      isNewSession: false,
     });
 
     // Sync history from Claude CLI
