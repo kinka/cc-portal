@@ -178,18 +178,21 @@ export class ClaudeSession extends EventEmitter {
   }
 
   // 流式发送消息 - 实时返回 chunks
-  async *sendMessageStream(content: string): AsyncGenerator<StreamChunk> {
+  // content 可选：有值时发送消息，无值时只监听响应
+  async *sendMessageStream(content?: string): AsyncGenerator<StreamChunk> {
     if (this._status !== 'running') {
       throw new Error('Session not running');
     }
 
-    // Add user message
-    this.messages.push({
-      id: randomUUID(),
-      role: 'user',
-      content,
-      timestamp: new Date(),
-    });
+    // Add user message if content provided
+    if (content !== undefined && content !== null) {
+      this.messages.push({
+        id: randomUUID(),
+        role: 'user',
+        content,
+        timestamp: new Date(),
+      });
+    }
 
     let fullResponse = '';
 

@@ -247,11 +247,17 @@ session.stop();
 | `HOST` | `0.0.0.0` | 服务主机 |
 | `DEBUG` | - | 启用调试日志 |
 
+## 测试
+
+- **API / 无 Claude**：`bun test` 会运行 `tests/e2e.test.ts` 中的健康检查、会话 CRUD、pending-permissions 等用例（不依赖 Claude CLI）。
+- **E2E（真实 Claude）**：需安装 Claude Code CLI，执行 `bun run test:e2e`（即 `RUN_E2E=1 bun test tests/e2e --timeout 120000`）会跑单轮与多轮对话的端到端用例。
+
 ## 项目结构
 
 ```
 cc-agents/
 ├── src/
+│   ├── app.ts                   # Fastify 应用构建（buildApp，供测试注入）
 │   ├── index.ts                 # HTTP 服务入口
 │   ├── sdk-types.ts             # SDK 类型（与 happy-cli 对齐）
 │   ├── ClaudeAgentBackend.ts    # Claude 进程管理、control 协议、权限
@@ -261,6 +267,8 @@ cc-agents/
 │   └── logger.ts                # 日志工具
 ├── docs/
 │   └── ALIGNMENT.md             # 与 happy-cli 对齐改造成果记录
+├── tests/
+│   └── e2e.test.ts              # Bun 端到端与 API 测试
 ├── package.json
 ├── tsconfig.json
 └── README.md

@@ -1,24 +1,26 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, spyOn, beforeEach, afterEach } from "bun:test";
 import { logger } from './logger';
 
 describe('logger', () => {
-  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
-  let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
+  let consoleLogSpy: ReturnType<typeof spyOn>;
+  let consoleErrorSpy: ReturnType<typeof spyOn>;
+  let consoleWarnSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
-    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    consoleLogSpy = spyOn(console, 'log').mockImplementation(() => {});
+    consoleErrorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    consoleWarnSpy = spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    consoleLogSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
     delete process.env.DEBUG;
   });
 
   describe('info', () => {
-    it('should log info message', () => {
+    test('should log info message', () => {
       logger.info('test message');
       expect(consoleLogSpy).toHaveBeenCalled();
       const call = consoleLogSpy.mock.calls[0];
@@ -26,7 +28,7 @@ describe('logger', () => {
       expect(call[1]).toBe('test message');
     });
 
-    it('should log multiple arguments', () => {
+    test('should log multiple arguments', () => {
       logger.info('message', { key: 'value' }, 123);
       expect(consoleLogSpy).toHaveBeenCalled();
       const call = consoleLogSpy.mock.calls[0];
@@ -37,7 +39,7 @@ describe('logger', () => {
   });
 
   describe('error', () => {
-    it('should log error message', () => {
+    test('should log error message', () => {
       logger.error('error message');
       expect(consoleErrorSpy).toHaveBeenCalled();
       const call = consoleErrorSpy.mock.calls[0];
@@ -47,7 +49,7 @@ describe('logger', () => {
   });
 
   describe('warn', () => {
-    it('should log warning message', () => {
+    test('should log warning message', () => {
       logger.warn('warning message');
       expect(consoleWarnSpy).toHaveBeenCalled();
       const call = consoleWarnSpy.mock.calls[0];
@@ -57,12 +59,12 @@ describe('logger', () => {
   });
 
   describe('debug', () => {
-    it('should not log debug message when DEBUG is not set', () => {
+    test('should not log debug message when DEBUG is not set', () => {
       logger.debug('debug message');
       expect(consoleLogSpy).not.toHaveBeenCalled();
     });
 
-    it('should log debug message when DEBUG is set', () => {
+    test('should log debug message when DEBUG is set', () => {
       process.env.DEBUG = 'true';
       logger.debug('debug message');
       expect(consoleLogSpy).toHaveBeenCalled();
@@ -73,7 +75,7 @@ describe('logger', () => {
   });
 
   describe('success', () => {
-    it('should log success message', () => {
+    test('should log success message', () => {
       logger.success('success message');
       expect(consoleLogSpy).toHaveBeenCalled();
       const call = consoleLogSpy.mock.calls[0];

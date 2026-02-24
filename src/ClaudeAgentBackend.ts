@@ -355,7 +355,7 @@ export class ClaudeAgentBackend extends EventEmitter {
     }
   }
 
-  async *queryStream(message: string): AsyncGenerator<StreamChunk> {
+  async *queryStream(message?: string): AsyncGenerator<StreamChunk> {
     await this.initialize();
     await this.acquireLock();
 
@@ -365,11 +365,14 @@ export class ClaudeAgentBackend extends EventEmitter {
         return;
       }
 
-      const userMessage: SDKUserMessage = {
-        type: 'user',
-        message: { role: 'user', content: message },
-      };
-      this.child.stdin.write(JSON.stringify(userMessage) + '\n');
+      // Send message if provided
+      if (message !== undefined && message !== null) {
+        const userMessage: SDKUserMessage = {
+          type: 'user',
+          message: { role: 'user', content: message },
+        };
+        this.child.stdin.write(JSON.stringify(userMessage) + '\n');
+      }
 
       const timeoutMs = 300_000;
       let timeoutHandle: ReturnType<typeof setTimeout>;
