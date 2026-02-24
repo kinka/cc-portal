@@ -9,6 +9,8 @@ export interface CreateSessionOptions {
   allowedTools?: string[];
   disallowedTools?: string[];
   permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
+  /** Timeout in ms for HTTP tool approval when permissionMode is not bypass. Default 300000. */
+  permissionTimeoutMs?: number;
   mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
   maxTurns?: number;
   envVars?: Record<string, string>;
@@ -29,6 +31,7 @@ export class ClaudeSessionManager {
       allowedTools: options.allowedTools,
       disallowedTools: options.disallowedTools,
       permissionMode: options.permissionMode,
+      permissionTimeoutMs: options.permissionTimeoutMs,
       mcpServers: options.mcpServers,
       maxTurns: options.maxTurns,
       envVars: options.envVars,

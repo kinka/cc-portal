@@ -93,7 +93,7 @@ Content-Type: application/json
 ```
 
 - `permissionMode`: `default` | `acceptEdits` | `bypassPermissions` | `plan`，默认不传时为放行。
-- 纯 HTTP 下无法使用「工具审批回调」`canCallTool`，仅程序化创建 Session 时可传；详见 [docs/ALIGNMENT.md](docs/ALIGNMENT.md)。
+- `permissionTimeoutMs`: HTTP 工具审批超时时间（毫秒），默认 300000（5 分钟）。
 
 #### 列出所有会话
 ```bash
@@ -119,6 +119,35 @@ Content-Type: application/json
 ```bash
 GET /sessions/:sessionId/stream
 ```
+
+#### 工具审批（permissionMode 非 bypass 时）
+
+创建 Session 时使用 `permissionMode: 'default'`（或 `acceptEdits`/`plan`）且不传 `canCallTool`，Claude 请求工具时会挂起，由客户端通过 HTTP 审批：
+
+```bash
+# 方式1: 轮询待审批列表
+GET /sessions/:sessionId/pending-permissions
+# 返回 { "pending": [{ "requestId", "toolName", "input", "createdAt" }] }
+
+# 方式2: SSE 实时推送（推荐）
+GET /sessions/:sessionId/pending-permissions?stream=1
+# 实时收到: { "type": "pending", "requestId", "toolName", "input", "createdAt" }
+# 审批后收到: { "type": "resolved", "requestId", "result" }
+
+# 批准或拒绝
+POST /sessions/:sessionId/permissions/:requestId
+Content-Type: application/json
+{ "approved": true, "updatedInput": {} }   # 批准，可选修改入参
+{ "approved": false, "message": "拒绝原因" } # 拒绝
+```
+
+**SSE 流中的实时通知**：在使用 `/sessions/:id/stream` 时，如果工具需要审批，会收到 `permission_request` 类型的 chunk：
+
+```json
+{ "type": "permission_request", "requestId": "...", "toolName": "Edit", "toolInput": {...}, "content": "..." }
+```
+
+可选 `permissionTimeoutMs`（默认 300000）控制等待审批超时。
 
 #### 停止会话
 ```bash
@@ -237,9 +266,10 @@ cc-agents/
 └── README.md
 ```
 
-## 与 happy-cli 对齐
+## 与 happy-cli / 官方 SDK
 
-权限模式、工具调用 control 协议、消息类型与流式 chunk 已与 happy-cli 对齐，改造成果见 **[docs/ALIGNMENT.md](docs/ALIGNMENT.md)**。
+- **与 happy-cli 对齐**：权限模式、control 协议、消息类型与流式 chunk，见 **[docs/ALIGNMENT.md](docs/ALIGNMENT.md)**。
+- **与官方 Claude Agent SDK 的差异**：架构（CLI 子进程 vs 直连 API）、消息格式、能力对比，见 **[docs/OFFICIAL-SDK-DIFFERENCES.md](docs/OFFICIAL-SDK-DIFFERENCES.md)**。
 
 ## 技术栈
 
@@ -255,7 +285,7 @@ cc-agents/
 3. 每个会话启动一个 Claude 进程，多轮对话复用该进程（同一时刻仅处理一条 query，顺序无冲突）
 4. 会话消息历史保存在内存中，重启服务会丢失
 5. 进程在 session 销毁时自动清理
-6. **HTTP 下无法使用 canCallTool**：工具审批回调仅在使用 Node API 创建 Session 时可用；HTTP 下请用 `permissionMode: 'bypassPermissions'` 或接受无回调时自动 deny。详见 [docs/ALIGNMENT.md](docs/ALIGNMENT.md)。
+6. **HTTP 工具审批**：HTTP 下不提供 `canCallTool` 回调时，工具调用会进入待审批队列，通过 `GET /sessions/:id/pending-permissions` 和 `POST /sessions/:id/permissions/:requestId` 进行审批。
 
 ## 性能优化
 

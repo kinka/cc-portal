@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { ClaudeAgentBackend, type StreamChunk } from './ClaudeAgentBackend';
-import type { CanCallToolCallback, PermissionMode } from './sdk-types';
+import type { CanCallToolCallback, PermissionMode, PermissionResult } from './sdk-types';
 import { logger } from './logger';
 
 export interface ClaudeSessionOptions {
@@ -14,12 +14,22 @@ export interface ClaudeSessionOptions {
   permissionMode?: PermissionMode;
   /** Required when permissionMode is not bypassPermissions; used for programmatic approval. */
   canCallTool?: CanCallToolCallback;
+  /** Timeout in ms for HTTP permission approval; used when canCallTool is not set. Default 300000 (5 min). */
+  permissionTimeoutMs?: number;
   mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
   maxTurns?: number;
   envVars?: Record<string, string>;
   initialMessage?: string;
   /** @deprecated use permissionMode: 'bypassPermissions' */
   bypassPermission?: boolean;
+}
+
+/** One pending tool approval request (HTTP flow). */
+export interface PendingPermissionItem {
+  requestId: string;
+  toolName: string;
+  input: unknown;
+  createdAt: string;
 }
 
 export interface Message {
@@ -29,7 +39,18 @@ export interface Message {
   timestamp: Date;
 }
 
+interface PendingPermission {
+  requestId: string;
+  toolName: string;
+  input: unknown;
+  createdAt: Date;
+  resolve: (result: PermissionResult) => void;
+  reject: (err: Error) => void;
+  timeoutHandle?: ReturnType<typeof setTimeout>;
+}
+
 export class ClaudeSession extends EventEmitter {
+  private _onPermissionPending?: () => void;
   readonly id: string;
   readonly path: string;
   readonly createdAt: Date;
@@ -37,6 +58,8 @@ export class ClaudeSession extends EventEmitter {
   private backend: ClaudeAgentBackend;
   private messages: Message[] = [];
   private _status: 'running' | 'stopped' = 'running';
+  private pendingPermissions = new Map<string, PendingPermission>();
+  private permissionTimeoutMs: number;
 
   constructor(options: ClaudeSessionOptions) {
     super();
@@ -44,6 +67,12 @@ export class ClaudeSession extends EventEmitter {
     this.path = options.path;
     this.createdAt = new Date();
     this.claudeSessionId = options.id; // Use session ID as Claude session ID
+    this.permissionTimeoutMs = options.permissionTimeoutMs ?? 300_000;
+
+    const needsPermissionResolver =
+      !options.canCallTool &&
+      options.permissionMode !== 'bypassPermissions' &&
+      (options.bypassPermission === undefined || options.bypassPermission === false);
 
     this.backend = new ClaudeAgentBackend({
       cwd: options.path,
@@ -53,6 +82,9 @@ export class ClaudeSession extends EventEmitter {
       disallowedTools: options.disallowedTools,
       permissionMode: options.permissionMode,
       canCallTool: options.canCallTool,
+      permissionResolver: needsPermissionResolver
+        ? (requestId, toolName, input) => this.waitForPermission(requestId, toolName, input)
+        : undefined,
       mcpServers: options.mcpServers,
       maxTurns: options.maxTurns,
       bypassPermission: options.bypassPermission,
@@ -64,6 +96,58 @@ export class ClaudeSession extends EventEmitter {
         logger.error('Initial message failed:', err)
       );
     }
+  }
+
+  /** Used by backend when permissionResolver is set: enqueue request and wait for respondToPermission. */
+  waitForPermission(
+    requestId: string,
+    toolName: string,
+    input: unknown,
+  ): Promise<PermissionResult> {
+    return new Promise<PermissionResult>((resolve, reject) => {
+      const createdAt = new Date();
+      const timeoutHandle = setTimeout(() => {
+        if (this.pendingPermissions.delete(requestId)) {
+          reject(new Error('Permission request timed out'));
+        }
+      }, this.permissionTimeoutMs);
+
+      this.pendingPermissions.set(requestId, {
+        requestId,
+        toolName,
+        input,
+        createdAt,
+        resolve,
+        reject,
+        timeoutHandle,
+      });
+      logger.debug(`[Session ${this.id}] Pending permission: ${requestId} ${toolName}`);
+      // Notify SSE subscribers
+      this.emit('permissionPending', { requestId, toolName, input, createdAt: createdAt.toISOString() });
+      this._onPermissionPending?.();
+    });
+  }
+
+  /** Resolve a pending permission (e.g. from HTTP POST). Returns false if requestId not found or already resolved. */
+  respondToPermission(requestId: string, result: PermissionResult): boolean {
+    const pending = this.pendingPermissions.get(requestId);
+    if (!pending) return false;
+    this.pendingPermissions.delete(requestId);
+    if (pending.timeoutHandle) clearTimeout(pending.timeoutHandle);
+    pending.resolve(result);
+    // Notify SSE subscribers
+    this.emit('permissionResolved', { requestId, result });
+    return true;
+  }
+
+  /** List pending tool approval requests for HTTP GET. */
+  listPendingPermissions(): PendingPermissionItem[] {
+    return Array.from(this.pendingPermissions.values()).map((p) => ({
+      requestId: p.requestId,
+      toolName: p.toolName,
+      input: p.input,
+      createdAt: p.createdAt.toISOString(),
+    }));
   }
 
   async sendMessage(content: string): Promise<string> {
@@ -140,6 +224,16 @@ export class ClaudeSession extends EventEmitter {
 
   stop() {
     this._status = 'stopped';
+    const pendingIds = Array.from(this.pendingPermissions.keys());
+    for (const [, pending] of this.pendingPermissions) {
+      if (pending.timeoutHandle) clearTimeout(pending.timeoutHandle);
+      pending.reject(new Error('Session stopped'));
+    }
+    this.pendingPermissions.clear();
+    // Notify SSE subscribers about cleared pending permissions
+    for (const requestId of pendingIds) {
+      this.emit('permissionResolved', { requestId, result: { behavior: 'deny' as const, message: 'Session stopped' } });
+    }
     this.backend.destroy();
     this.emit('stopped');
   }

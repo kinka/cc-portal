@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface, type Interface } from 'node:readline';
 import { logger } from './logger';
@@ -29,7 +30,7 @@ export type {
 
 /** Stream chunk types aligned with happy-cli message handling */
 export interface StreamChunk {
-  type: 'text' | 'tool_start' | 'tool_end' | 'tool_output' | 'error' | 'done' | 'system' | 'log';
+  type: 'text' | 'tool_start' | 'tool_end' | 'tool_output' | 'error' | 'done' | 'system' | 'log' | 'permission_request';
   content?: string;
   toolName?: string;
   toolInput?: unknown;
@@ -45,6 +46,8 @@ export interface StreamChunk {
   /** log */
   level?: 'debug' | 'info' | 'warn' | 'error';
   message?: string;
+  /** permission request (HTTP flow) */
+  requestId?: string;
 }
 
 /** Async queue: read loop pushes, query/queryStream pull */
@@ -81,13 +84,15 @@ export interface ClaudeAgentBackendOptions {
   permissionMode?: PermissionMode;
   /** When permissionMode is not bypassPermissions, tool calls are approved via this callback. If missing, tool calls are denied. */
   canCallTool?: CanCallToolCallback;
+  /** When canCallTool is not set (e.g. HTTP), use this to get approval; returns Promise that resolves when client calls respondToPermission. */
+  permissionResolver?: (requestId: string, toolName: string, input: unknown) => Promise<PermissionResult>;
   /** @deprecated use permissionMode: 'bypassPermissions' instead */
   bypassPermission?: boolean;
   mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
   maxTurns?: number;
 }
 
-export class ClaudeAgentBackend {
+export class ClaudeAgentBackend extends EventEmitter {
   private cwd: string;
   private claudeSessionId: string;
   private model?: string;
@@ -95,6 +100,7 @@ export class ClaudeAgentBackend {
   private disallowedTools?: string[];
   private permissionMode: PermissionMode;
   private canCallTool?: CanCallToolCallback;
+  private permissionResolver?: (requestId: string, toolName: string, input: unknown) => Promise<PermissionResult>;
   private mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
   private maxTurns?: number;
 
@@ -107,14 +113,19 @@ export class ClaudeAgentBackend {
   /** Only one query or queryStream at a time */
   private consumerLock: Promise<void> = Promise.resolve();
   private releaseLock: (() => void) | null = null;
+  /** Permission request notifications for HTTP SSE flow */
+  private permissionRequestQueue: Array<{ requestId: string; toolName: string; input: unknown }> = [];
+  private permissionRequestWaiter?: (value: { requestId: string; toolName: string; input: unknown }) => void;
 
   constructor(options: ClaudeAgentBackendOptions) {
+    super();
     this.cwd = options.cwd;
     this.claudeSessionId = options.claudeSessionId;
     this.model = options.model;
     this.allowedTools = options.allowedTools;
     this.disallowedTools = options.disallowedTools;
     this.canCallTool = options.canCallTool;
+    this.permissionResolver = options.permissionResolver;
     this.mcpServers = options.mcpServers;
     this.maxTurns = options.maxTurns;
     // Backward compat: bypassPermission true => bypassPermissions
@@ -154,6 +165,25 @@ export class ClaudeAgentBackend {
           response = await this.canCallTool(request.request.tool_name, request.request.input, {
             signal: controller.signal,
           });
+        } else if (this.permissionResolver) {
+          // Notify SSE stream that a permission request is pending
+          this.emit('permissionRequest', {
+            requestId: request.request_id,
+            toolName: request.request.tool_name,
+            input: request.request.input,
+          });
+          try {
+            response = await this.permissionResolver(
+              request.request_id,
+              request.request.tool_name,
+              request.request.input,
+            );
+          } catch (err) {
+            response = {
+              behavior: 'deny',
+              message: err instanceof Error ? err.message : 'Permission request failed or timed out',
+            };
+          }
         } else {
           response = { behavior: 'deny', message: 'No canCallTool callback configured' };
         }
@@ -343,16 +373,43 @@ export class ClaudeAgentBackend {
 
       const timeoutMs = 300_000;
       let timeoutHandle: ReturnType<typeof setTimeout>;
-      const nextWithTimeout = (): Promise<SDKMessage> =>
+
+      // Create a promise that resolves on permission request event
+      const waitForPermissionRequest = (): Promise<{ type: 'permission_request'; requestId: string; toolName: string; input: unknown }> =>
+        new Promise((resolve) => {
+          const handler = (data: { requestId: string; toolName: string; input: unknown }) => {
+            this.off('permissionRequest', handler);
+            resolve({ type: 'permission_request', ...data });
+          };
+          this.once('permissionRequest', handler);
+        });
+
+      const nextWithTimeout = (): Promise<SDKMessage | { type: 'permission_request'; requestId: string; toolName: string; input: unknown }> =>
         Promise.race([
           this.messageQueue.next(),
-          new Promise<SDKMessage>((_, reject) => {
+          waitForPermissionRequest(),
+          new Promise<never>((_, reject) => {
             timeoutHandle = setTimeout(() => reject(new Error('Timeout after 300s')), timeoutMs);
           }),
         ]).finally(() => clearTimeout(timeoutHandle!));
 
       while (true) {
-        const msg = await nextWithTimeout();
+        const msgOrEvent = await nextWithTimeout();
+
+        // Handle permission request event from HTTP flow
+        if (msgOrEvent && typeof msgOrEvent === 'object' && 'type' in msgOrEvent && msgOrEvent.type === 'permission_request') {
+          const event = msgOrEvent as { type: 'permission_request'; requestId: string; toolName: string; input: unknown };
+          yield {
+            type: 'permission_request',
+            requestId: event.requestId,
+            toolName: event.toolName,
+            toolInput: event.input,
+            content: `Claude requests to use tool: ${event.toolName}`,
+          };
+          continue;
+        }
+
+        const msg = msgOrEvent as SDKMessage;
 
         if (msg.type === 'system') {
           const sys = msg as SDKSystemMessage;

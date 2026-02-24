@@ -72,27 +72,36 @@
 | `allowedTools` | string[] | 允许的工具列表 |
 | `disallowedTools` | string[] | 禁止的工具列表 |
 | `permissionMode` | 'default' \| 'acceptEdits' \| 'bypassPermissions' \| 'plan' | 权限模式，默认未传时为 bypass |
+| `permissionTimeoutMs` | number | HTTP 工具审批超时（毫秒），默认 300000 |
 | `mcpServers` | Record<...> | MCP 服务配置 |
 | `maxTurns` | number | 最大轮数 |
 | `envVars` | Record<string, string> | 环境变量 |
 | `bypassPermission` | boolean | 已废弃，请用 `permissionMode: 'bypassPermissions'` |
 
-### 4.2 canCallTool 在 HTTP 下的限制
+### 4.2 HTTP 工具审批流程
 
-- **程序化使用**：`new ClaudeSession({ permissionMode: 'default', canCallTool: async (...) => ... })` 可完整使用工具审批。
-- **纯 HTTP 使用**：无法传递回调，因此 **无法实现「实时弹窗式」工具审批**。  
-  - 可选方案：`permissionMode: 'bypassPermissions'`（全部放行）或依赖当前逻辑（无回调时自动 deny）。  
-  - 若将来要在 HTTP 下支持审批，可增加「待审批队列 + 审批接口」（例如 `GET /sessions/:id/pending-permissions`、`POST /sessions/:id/permissions/:requestId`），由前端轮询/SSE 获取待审批项并调用接口回复。
+- **程序化使用**：`new ClaudeSession({ permissionMode: 'default', canCallTool: async (...) => ... })` 可完整使用工具审批回调。
+- **纯 HTTP 使用**：支持实时审批通知，无需传回调：
+
+  **审批接口**：
+  - `GET /sessions/:sessionId/pending-permissions`：返回当前待审批列表 `{ pending: [...] }`
+  - `GET /sessions/:sessionId/pending-permissions?stream=1`：SSE 实时推送，新审批请求自动推送 `{ type: 'pending', ... }`，审批完成推送 `{ type: 'resolved', ... }`
+  - `POST /sessions/:sessionId/permissions/:requestId`：Body `{ approved, updatedInput?, message? }`，完成批准或拒绝
+
+  **流式通知**：
+  - `/sessions/:id/stream` SSE 流中，当需要审批时自动产生 `permission_request` chunk，含 `requestId`, `toolName`, `toolInput`
+
+  创建 Session 时使用 `permissionMode: 'default'`（或 acceptEdits/plan）且不传 `canCallTool`，即走 HTTP 审批；可选 `permissionTimeoutMs`（默认 5 分钟）。
 
 ## 5. 文件与职责
 
 | 文件 | 职责 |
 |------|------|
 | `src/sdk-types.ts` | 与 happy-cli 对齐的 SDK 类型与 PermissionMode |
-| `src/ClaudeAgentBackend.ts` | 单读循环、control 处理、permissionMode/canCallTool、StreamChunk 产出 |
-| `src/ClaudeSession.ts` | 透传 permissionMode、canCallTool、disallowedTools、mcpServers、maxTurns |
+| `src/ClaudeAgentBackend.ts` | 单读循环、control 处理、permissionMode/canCallTool、permissionResolver、StreamChunk 产出 |
+| `src/ClaudeSession.ts` | 会话管理、HTTP 审批队列、EventEmitter 事件通知 |
 | `src/ClaudeSessionManager.ts` | CreateSessionOptions 扩展 |
-| `src/index.ts` | POST /sessions 请求体扩展 |
+| `src/index.ts` | HTTP API、SSE 审批实时推送 |
 
 ## 6. 向后兼容
 
