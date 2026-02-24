@@ -1,6 +1,8 @@
 import { test, describe, expect } from 'bun:test';
 import { buildApp } from '../src/app';
-import { mkdtempSync, realpathSync } from 'node:fs';
+import { ClaudeSessionManager } from '../src/ClaudeSessionManager';
+import { DatabaseManager } from '../src/db';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -93,36 +95,31 @@ describe('API (no claude)', () => {
       expect(createRes.status).toBe(200);
       const createBody = (await createRes.json()) as {
         sessionId: string;
-        status: string;
         path: string;
         createdAt: string;
       };
       expect(createBody.sessionId).toBeDefined();
-      expect(createBody.status).toBe('running');
       const dirReal = realpathSync.native(dir);
       expect(createBody.path).toBe(dirReal);
 
       const listRes = await fetch(`${base}/sessions`);
       expect(listRes.status).toBe(200);
       const listBody = (await listRes.json()) as {
-        sessions: Array<{ sessionId: string; status: string; path: string; createdAt: string }>;
+        sessions: Array<{ sessionId: string; path: string; createdAt: string }>;
       };
       expect(listBody.sessions.length).toBe(1);
       expect(listBody.sessions[0].sessionId).toBe(createBody.sessionId);
-      expect(listBody.sessions[0].status).toBe('running');
       expect(listBody.sessions[0].path).toBe(dirReal);
 
       const getRes = await fetch(`${base}/sessions/${createBody.sessionId}`);
       expect(getRes.status).toBe(200);
       const getBody = (await getRes.json()) as {
         sessionId: string;
-        status: string;
         path: string;
         createdAt: string;
         messages: Array<{ id: string; role: string; content: string; timestamp: string }>;
       };
       expect(getBody.sessionId).toBe(createBody.sessionId);
-      expect(getBody.status).toBe('running');
       expect(getBody.path).toBe(dirReal);
       expect(getBody.createdAt).toBeDefined();
       expect(Array.isArray(getBody.messages)).toBe(true);
@@ -213,7 +210,7 @@ describe('API (no claude)', () => {
     }
   });
 
-  test('stop session then delete', async () => {
+  test('delete session', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'cc-agents-e2e-'));
     const app = buildApp();
     await app.listen({ port: 0, host: '127.0.0.1' });
@@ -228,11 +225,6 @@ describe('API (no claude)', () => {
       });
       expect(createRes.status).toBe(200);
       const { sessionId } = (await createRes.json()) as { sessionId: string };
-
-      const stopRes = await fetch(`${base}/sessions/${sessionId}/stop`, { method: 'POST' });
-      expect(stopRes.status).toBe(200);
-      const stopBody = (await stopRes.json()) as { status: string };
-      expect(stopBody.status).toBe('stopped');
 
       const delRes = await fetch(`${base}/sessions/${sessionId}`, { method: 'DELETE' });
       expect(delRes.status).toBe(200);
@@ -311,6 +303,66 @@ describe('E2E (real claude)', () => {
       expect(secondBody.response.toLowerCase()).toContain('testuser');
     } finally {
       await app.close();
+    }
+  }, 120_000);
+
+  test.skipIf(!runE2E)('session auto-resume after server restart', async () => {
+    const dbPath = join(tmpdir(), 'cc-agents-restart-test.db');
+    const dir = mkdtempSync(join(tmpdir(), 'cc-agents-restart-'));
+    const userId = 'restart-test-user';
+
+    // First app instance
+    const db1 = new DatabaseManager(dbPath);
+    const manager1 = new ClaudeSessionManager(db1, { usersDir: dir });
+    const app1 = buildApp({ sessionManager: manager1, db: db1 });
+    await app1.listen({ port: 0, host: '127.0.0.1' });
+    const port1 = (app1.server!.address() as { port: number }).port;
+    const base1 = `http://127.0.0.1:${port1}`;
+
+    try {
+      // Create session with first app
+      const createRes = await fetch(`${base1}/sessions?userId=${userId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: dir }),
+      });
+      expect(createRes.status).toBe(200);
+      const { sessionId } = (await createRes.json()) as { sessionId: string };
+
+      // Stop the session (simulating server shutdown)
+      const stopRes = await fetch(`${base1}/sessions/${sessionId}/stop?userId=${userId}`, { method: 'POST' });
+      expect(stopRes.status).toBe(200);
+
+      // Close first app
+      await app1.close();
+      db1.close();
+
+      // Second app instance (simulating restart)
+      const db2 = new DatabaseManager(dbPath);
+      const manager2 = new ClaudeSessionManager(db2, { usersDir: dir });
+      const app2 = buildApp({ sessionManager: manager2, db: db2 });
+      await app2.listen({ port: 0, host: '127.0.0.1' });
+      const port2 = (app2.server!.address() as { port: number }).port;
+      const base2 = `http://127.0.0.1:${port2}`;
+
+      try {
+        // Access the session (should auto-resume)
+        const getRes = await fetch(`${base2}/sessions/${sessionId}?userId=${userId}`);
+        expect(getRes.status).toBe(200);
+        const getBody = (await getRes.json()) as { sessionId: string; status: string };
+        expect(getBody.sessionId).toBe(sessionId);
+        // Should be accessible (auto-resumed)
+        expect(getBody.status).toBe('running');
+
+        // Cleanup
+        await fetch(`${base2}/sessions/${sessionId}?userId=${userId}`, { method: 'DELETE' });
+      } finally {
+        await app2.close();
+        db2.close();
+      }
+    } finally {
+      // Cleanup database file
+      try { rmSync(dbPath); } catch {}
     }
   }, 120_000);
 });

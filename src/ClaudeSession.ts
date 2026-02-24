@@ -58,7 +58,6 @@ export class ClaudeSession extends EventEmitter {
   readonly claudeSessionId: string;
   private backend: ClaudeAgentBackend;
   private messages: Message[] = [];
-  private _status: 'running' | 'stopped' = 'running';
   private pendingPermissions = new Map<string, PendingPermission>();
   private permissionTimeoutMs: number;
 
@@ -153,10 +152,6 @@ export class ClaudeSession extends EventEmitter {
   }
 
   async sendMessage(content: string): Promise<string> {
-    if (this._status !== 'running') {
-      throw new Error('Session not running');
-    }
-
     // Add user message
     this.messages.push({
       id: randomUUID(),
@@ -165,7 +160,7 @@ export class ClaudeSession extends EventEmitter {
       timestamp: new Date(),
     });
 
-    // Query Claude
+    // Query Claude (backend will auto-restart process if needed)
     const response = await this.backend.query(content);
 
     // Add assistant message
@@ -182,10 +177,6 @@ export class ClaudeSession extends EventEmitter {
   // 流式发送消息 - 实时返回 chunks
   // content 可选：有值时发送消息，无值时只监听响应
   async *sendMessageStream(content?: string): AsyncGenerator<StreamChunk> {
-    if (this._status !== 'running') {
-      throw new Error('Session not running');
-    }
-
     // Add user message if content provided
     if (content !== undefined && content !== null) {
       this.messages.push({
@@ -198,7 +189,7 @@ export class ClaudeSession extends EventEmitter {
 
     let fullResponse = '';
 
-    // Query Claude with stream
+    // Query Claude with stream (backend will auto-restart process if needed)
     try {
       for await (const chunk of this.backend.queryStream(content)) {
         if (chunk.type === 'text' && chunk.content) {
@@ -206,6 +197,10 @@ export class ClaudeSession extends EventEmitter {
         }
         yield chunk;
       }
+    } catch (error) {
+      // Propagate error to client
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      yield { type: 'error', error: errorMsg } as StreamChunk;
     } finally {
       // Add assistant message (只有在有内容时才添加)
       if (fullResponse) {
@@ -223,23 +218,44 @@ export class ClaudeSession extends EventEmitter {
     return [...this.messages];
   }
 
-  get status() {
-    return this._status;
+  /** Sync conversation history from Claude CLI backend */
+  async syncHistory(): Promise<void> {
+    try {
+      const history = await this.backend.getHistory();
+      if (history.length > 0) {
+        // Convert to Message format
+        this.messages = history.map(h => ({
+          id: randomUUID(),
+          role: h.role,
+          content: h.content,
+          timestamp: h.timestamp || new Date(),
+        }));
+        this.log.info({ count: history.length }, 'Synced conversation history');
+      }
+    } catch (err) {
+      this.log.warn({ err }, 'Failed to sync history');
+    }
   }
 
-  stop() {
-    this._status = 'stopped';
+  /** Check if the underlying Claude process is alive. */
+  isProcessAlive(): boolean {
+    return this.backend.isProcessAlive();
+  }
+
+  /** Destroy the underlying process and clear pending permissions. Called when session is deleted. */
+  destroy() {
+    // Clear pending permissions
     const pendingIds = Array.from(this.pendingPermissions.keys());
     for (const [, pending] of this.pendingPermissions) {
       if (pending.timeoutHandle) clearTimeout(pending.timeoutHandle);
-      pending.reject(new Error('Session stopped'));
+      pending.reject(new Error('Session destroyed'));
     }
     this.pendingPermissions.clear();
-    // Notify SSE subscribers about cleared pending permissions
     for (const requestId of pendingIds) {
-      this.emit('permissionResolved', { requestId, result: { behavior: 'deny' as const, message: 'Session stopped' } });
+      this.emit('permissionResolved', { requestId, result: { behavior: 'deny' as const, message: 'Session destroyed' } });
     }
+    // Destroy process
     this.backend.destroy();
-    this.emit('stopped');
+    this.emit('destroyed');
   }
 }

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { spawn, execSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface, type Interface } from 'node:readline';
 import { createLogger } from './logger';
 
@@ -74,6 +74,10 @@ class AsyncMessageQueue {
       this.waiters.push(resolve);
     });
   }
+
+  hasPending(): boolean {
+    return this.queue.length > 0;
+  }
 }
 
 export interface ClaudeAgentBackendOptions {
@@ -92,6 +96,8 @@ export interface ClaudeAgentBackendOptions {
   bypassPermission?: boolean;
   mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
   maxTurns?: number;
+  /** If true, use --session-id (new session). If false, use --resume (existing session). */
+  isNewSession?: boolean;
 }
 
 export class ClaudeAgentBackend extends EventEmitter {
@@ -105,6 +111,7 @@ export class ClaudeAgentBackend extends EventEmitter {
   private permissionResolver?: (requestId: string, toolName: string, input: unknown) => Promise<PermissionResult>;
   private mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
   private maxTurns?: number;
+  private isNewSession = true;
 
   private child?: ChildProcessWithoutNullStreams;
   private rl?: Interface;
@@ -115,12 +122,16 @@ export class ClaudeAgentBackend extends EventEmitter {
   /** Only one query or queryStream at a time */
   private consumerLock: Promise<void> = Promise.resolve();
   private releaseLock: (() => void) | null = null;
+  /** Guard to prevent concurrent initialize() calls */
+  private initializePromise: Promise<void> | null = null;
   /** Permission request notifications for HTTP SSE flow */
   private permissionRequestQueue: Array<{ requestId: string; toolName: string; input: unknown }> = [];
   private permissionRequestWaiter?: (value: { requestId: string; toolName: string; input: unknown }) => void;
 
   constructor(options: ClaudeAgentBackendOptions) {
     super();
+    // Increase max listeners to avoid warning with multiple SSE streams
+    this.setMaxListeners(100);
     this.cwd = options.cwd;
     this.claudeSessionId = options.claudeSessionId;
     this.model = options.model;
@@ -130,12 +141,8 @@ export class ClaudeAgentBackend extends EventEmitter {
     this.permissionResolver = options.permissionResolver;
     this.mcpServers = options.mcpServers;
     this.maxTurns = options.maxTurns;
+    this.isNewSession = options.isNewSession ?? true;
     // Backward compat: bypassPermission true => bypassPermissions
-    if (options.bypassPermission !== undefined) {
-      this.permissionMode = options.bypassPermission ? 'bypassPermissions' : 'default';
-    } else {
-      this.permissionMode = options.permissionMode ?? 'bypassPermissions';
-    }
   }
 
   private acquireLock(): Promise<void> {
@@ -163,7 +170,10 @@ export class ClaudeAgentBackend extends EventEmitter {
     try {
       let response: PermissionResult;
       if (request.request.subtype === 'can_use_tool') {
-        if (this.canCallTool) {
+        // In bypassPermissions mode, auto-allow all tool calls
+        if (this.permissionMode === 'bypassPermissions') {
+          response = { behavior: 'allow', updatedInput: (request.request.input || {}) as Record<string, unknown> };
+        } else if (this.canCallTool) {
           response = await this.canCallTool(request.request.tool_name, request.request.input, {
             signal: controller.signal,
           });
@@ -252,9 +262,34 @@ export class ClaudeAgentBackend extends EventEmitter {
     this.rl.on('line', processLine);
   }
 
+  /** Kill any process whose command line contains this session ID (releases CLI lock). */
+  private killExistingProcessForSession(): void {
+    try {
+      // Match by session ID so we catch claude regardless of argv order or binary path
+      execSync(`pkill -f "${this.claudeSessionId}"`, { stdio: 'ignore' });
+      log.debug({ sessionId: this.claudeSessionId }, 'Killed existing process for session');
+    } catch {
+      // pkill exits non-zero when no process matched; ignore
+    }
+  }
+
   private async initialize(): Promise<void> {
     if (this.isInitialized && this.isProcessAlive()) return;
+    // If another initialize() is already running, wait for it
+    if (this.initializePromise) {
+      await this.initializePromise;
+      return;
+    }
 
+    this.initializePromise = this.doInitialize();
+    try {
+      await this.initializePromise;
+    } finally {
+      this.initializePromise = null;
+    }
+  }
+
+  private async doInitialize(): Promise<void> {
     // If process died, clean up and reinitialize
     if (this.isInitialized && !this.isProcessAlive()) {
       log.warn('Process died, reinitializing');
@@ -263,54 +298,84 @@ export class ClaudeAgentBackend extends EventEmitter {
       this.readLoopStarted = false;
     }
 
-    const args = [
+    const baseArgs = [
       '--output-format',
       'stream-json',
       '--input-format',
       'stream-json',
       '--verbose',
-      '--session-id',
-      this.claudeSessionId,
-      '--permission-mode',
-      this.permissionMode,
     ];
 
-    if (this.model) args.push('--model', this.model);
-    if (this.allowedTools?.length) args.push('--allowedTools', this.allowedTools.join(','));
-    if (this.disallowedTools?.length) args.push('--disallowedTools', this.disallowedTools.join(','));
-    if (this.maxTurns != null) args.push('--max-turns', String(this.maxTurns));
-    if (this.canCallTool) args.push('--permission-prompt-tool', 'stdio');
+    if (this.permissionMode) baseArgs.push('--permission-mode', this.permissionMode);
+    if (this.model) baseArgs.push('--model', this.model);
+    if (this.allowedTools?.length) baseArgs.push('--allowedTools', this.allowedTools.join(','));
+    if (this.disallowedTools?.length) baseArgs.push('--disallowedTools', this.disallowedTools.join(','));
+    if (this.maxTurns != null) baseArgs.push('--max-turns', String(this.maxTurns));
+    if (this.canCallTool) baseArgs.push('--permission-prompt-tool', 'stdio');
     if (this.mcpServers && Object.keys(this.mcpServers).length > 0) {
-      args.push('--mcp-config', JSON.stringify({ mcpServers: this.mcpServers }));
+      baseArgs.push('--mcp-config', JSON.stringify({ mcpServers: this.mcpServers }));
     }
 
-    log.info({ args: args.slice(0, 6) }, 'Initializing Claude process');
+    // Try --resume first (existing session), fall back to --session-id (new session)
+    const strategies: Array<{ flag: string; label: string }> = [
+      { flag: '--resume', label: 'resume' },
+      { flag: '--session-id', label: 'new' },
+    ];
 
-    this.child = spawn('claude', args, {
-      cwd: this.cwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: process.env,
-    }) as ChildProcessWithoutNullStreams;
+    for (const strategy of strategies) {
+      const args = [...baseArgs, strategy.flag, this.claudeSessionId];
 
-    this.rl = createInterface({ input: this.child.stdout! });
+      // Kill any lingering process that holds this session
+      this.killExistingProcessForSession();
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-    this.child.on('error', (error) => {
-      log.error({ error: error.message }, 'Process error');
-      this.isInitialized = false;
-    });
+      log.info({ args: args.slice(0, 8), strategy: strategy.label }, 'Initializing Claude process');
+      this.child = spawn('claude', args, {
+        cwd: this.cwd,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: process.env,
+      }) as ChildProcessWithoutNullStreams;
+      this.rl = createInterface({ input: this.child.stdout! });
+      this.child.on('error', (error) => {
+        log.error({ error: error.message }, 'Process error');
+        this.isInitialized = false;
+      });
+      this.child.on('close', (code) => {
+        log.info({ code }, 'Process exited');
+        this.isInitialized = false;
+        this.rl?.close();
+      });
+      let stderrBuffer = '';
+      this.child.stderr!.on('data', (data) => {
+        const text = data.toString();
+        stderrBuffer += text;
+        log.debug({ stderr: text }, 'Claude stderr');
+      });
 
-    this.child.on('close', (code) => {
-      log.info({ code }, 'Process exited');
-      this.isInitialized = false;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (!this.child.killed && this.child.exitCode === null) {
+        this.isInitialized = true;
+        this.startReadLoop();
+        return;
+      }
+
+      // Process exited immediately
+      const exitCode = this.child?.exitCode;
+      const errorMatch = stderrBuffer.match(/Error:\s*(.+)/);
+      const errorMsg = errorMatch ? errorMatch[1].trim() : `Process exited with code ${exitCode}`;
       this.rl?.close();
-    });
+      this.child = undefined;
+      this.rl = undefined;
+      // --resume fails for new sessions (no conversation found); --session-id fails for existing ones (already in use)
+      // In either case, try the other strategy
+      if (strategy.flag === '--resume' || (/already in use/i.test(errorMsg) && strategy.flag === '--session-id')) {
+        log.info({ sessionId: this.claudeSessionId, strategy: strategy.label }, 'Strategy failed, trying alternative');
+        continue;
+      }
 
-    this.child.stderr!.on('data', (data) => {
-      log.debug({ stderr: data.toString() }, 'Claude stderr');
-    });
-
-    this.isInitialized = true;
-    this.startReadLoop();
+      log.error({ exitCode: exitCode ?? 1, stderr: stderrBuffer, strategy: strategy.label }, 'Claude process exited immediately');
+      throw new Error(`Failed to start Claude: ${errorMsg}`);
+    }
   }
 
   async query(message: string): Promise<string> {
@@ -461,6 +526,19 @@ export class ClaudeAgentBackend extends EventEmitter {
     } finally {
       this.releaseConsumerLock();
     }
+  }
+
+  /**
+   * Retrieve conversation history from Claude CLI.
+   * Note: Claude CLI doesn't expose history directly through the stream-json protocol.
+   * The conversation continues seamlessly when using --resume, but historical messages
+   * are not re-sent. This method returns empty array as history is maintained in-memory
+   * by the HTTP service during the session lifecycle.
+   */
+  async getHistory(): Promise<Array<{ role: 'user' | 'assistant'; content: string; timestamp?: Date }>> {
+    // Claude CLI doesn't send historical messages on resume
+    // History is maintained in-memory during the HTTP session
+    return [];
   }
 
   isProcessAlive(): boolean {
