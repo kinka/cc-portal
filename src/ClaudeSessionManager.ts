@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { ClaudeSession } from './ClaudeSession';
-import { logger } from './logger';
+import { createLogger } from './logger';
+
+const log = createLogger({ module: 'SessionManager' });
 
 export interface CreateSessionOptions {
   path: string;
@@ -40,7 +42,7 @@ export class ClaudeSessionManager {
     });
 
     this.sessions.set(id, session);
-    logger.info(`[Session ${id}] Created`);
+    log.info({ sessionId: id }, 'Session created');
 
     return session;
   }
@@ -67,13 +69,13 @@ export class ClaudeSessionManager {
   deleteSession(id: string): void {
     this.stopSession(id);
     this.sessions.delete(id);
-    logger.info(`[Session ${id}] Deleted`);
+    log.info({ sessionId: id }, 'Session deleted');
   }
 
   stopAllSessions(): void {
     for (const session of this.sessions.values()) {
       session.stop();
     }
-    logger.info('All sessions stopped');
+    log.info('All sessions stopped');
   }
 }

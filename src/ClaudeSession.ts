@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { ClaudeAgentBackend, type StreamChunk } from './ClaudeAgentBackend';
 import type { CanCallToolCallback, PermissionMode, PermissionResult } from './sdk-types';
-import { logger } from './logger';
+import { createLogger } from './logger';
 
 export interface ClaudeSessionOptions {
   id: string;
@@ -51,6 +51,7 @@ interface PendingPermission {
 
 export class ClaudeSession extends EventEmitter {
   private _onPermissionPending?: () => void;
+  private log;
   readonly id: string;
   readonly path: string;
   readonly createdAt: Date;
@@ -64,6 +65,7 @@ export class ClaudeSession extends EventEmitter {
   constructor(options: ClaudeSessionOptions) {
     super();
     this.id = options.id;
+    this.log = createLogger({ module: 'Session', sessionId: options.id });
     this.path = options.path;
     this.createdAt = new Date();
     this.claudeSessionId = options.id; // Use session ID as Claude session ID
@@ -93,7 +95,7 @@ export class ClaudeSession extends EventEmitter {
     // Send initial message if provided
     if (options.initialMessage) {
       this.sendMessage(options.initialMessage).catch(err =>
-        logger.error('Initial message failed:', err)
+        this.log.error({ err }, 'Initial message failed')
       );
     }
   }
@@ -121,7 +123,7 @@ export class ClaudeSession extends EventEmitter {
         reject,
         timeoutHandle,
       });
-      logger.debug(`[Session ${this.id}] Pending permission: ${requestId} ${toolName}`);
+      this.log.debug({ requestId, toolName }, 'Pending permission');
       // Notify SSE subscribers
       this.emit('permissionPending', { requestId, toolName, input, createdAt: createdAt.toISOString() });
       this._onPermissionPending?.();

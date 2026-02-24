@@ -9,7 +9,7 @@ const start = async () => {
     const host = process.env.HOST || '0.0.0.0';
 
     await fastify.listen({ port, host });
-    logger.info(`🚀 Claude Agent HTTP Service running at http://${host}:${port}`);
+    logger.info({ host, port }, 'Claude Agent HTTP Service running');
     logger.info('Available endpoints:');
     logger.info('  GET  /health                               - Health check');
     logger.info('  GET  /sessions                             - List all sessions');
@@ -22,19 +22,19 @@ const start = async () => {
     logger.info('  POST /sessions/:id/stop                    - Stop session');
     logger.info('  DELETE /sessions/:id                       - Delete session');
   } catch (err) {
-    logger.error('Failed to start server:', err);
+    logger.error({ err: String(err) }, 'Failed to start server');
     process.exit(1);
   }
 };
 
 process.on('SIGTERM', async () => {
-  logger.info('SIGTERM received, shutting down gracefully...');
+  logger.info('SIGTERM received, shutting down gracefully');
   await fastify.close();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
-  logger.info('SIGINT received, shutting down gracefully...');
+  logger.info('SIGINT received, shutting down gracefully');
   await fastify.close();
   process.exit(0);
 });

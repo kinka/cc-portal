@@ -1,19 +1,29 @@
-export const logger = {
-  info: (...args: any[]) => {
-    console.log('[INFO]', ...args);
-  },
-  error: (...args: any[]) => {
-    console.error('[ERROR]', ...args);
-  },
-  warn: (...args: any[]) => {
-    console.warn('[WARN]', ...args);
-  },
-  debug: (...args: any[]) => {
-    if (process.env.DEBUG) {
-      console.log('[DEBUG]', ...args);
+import pino from 'pino';
+
+export const isDev = process.env.NODE_ENV !== 'production';
+
+const transport = isDev
+  ? {
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        translateTime: 'SYS:standard',
+        ignore: 'pid,hostname',
+      },
     }
+  : undefined;
+
+export const logger = pino({
+  level: process.env.LOG_LEVEL || (isDev ? 'debug' : 'info'),
+  transport,
+  formatters: {
+    level: (label) => ({ level: label }),
   },
-  success: (...args: any[]) => {
-    console.log('[SUCCESS]', ...args);
-  },
-};
+  timestamp: pino.stdTimeFunctions.isoTime,
+});
+
+export function createLogger(context: Record<string, unknown>) {
+  return logger.child(context);
+}
+
+export type Logger = typeof logger;

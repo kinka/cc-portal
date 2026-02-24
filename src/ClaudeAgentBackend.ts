@@ -1,7 +1,9 @@
 import { EventEmitter } from 'node:events';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface, type Interface } from 'node:readline';
-import { logger } from './logger';
+import { createLogger } from './logger';
+
+const log = createLogger({ module: 'ClaudeAgent' });
 import type {
   SDKMessage,
   SDKUserMessage,
@@ -243,7 +245,7 @@ export class ClaudeAgentBackend extends EventEmitter {
 
         this.messageQueue.enqueue(msg);
       } catch {
-        logger.debug(`[Claude stdout] ${line}`);
+        log.debug({ line }, 'Claude stdout');
       }
     };
 
@@ -255,7 +257,7 @@ export class ClaudeAgentBackend extends EventEmitter {
 
     // If process died, clean up and reinitialize
     if (this.isInitialized && !this.isProcessAlive()) {
-      logger.warn('[ClaudeAgent] Process died, reinitializing...');
+      log.warn('Process died, reinitializing');
       this.rl?.close();
       this.isInitialized = false;
       this.readLoopStarted = false;
@@ -282,7 +284,7 @@ export class ClaudeAgentBackend extends EventEmitter {
       args.push('--mcp-config', JSON.stringify({ mcpServers: this.mcpServers }));
     }
 
-    logger.info(`[ClaudeAgent] Initializing: claude ${args.slice(0, 6).join(' ')}...`);
+    log.info({ args: args.slice(0, 6) }, 'Initializing Claude process');
 
     this.child = spawn('claude', args, {
       cwd: this.cwd,
@@ -293,18 +295,18 @@ export class ClaudeAgentBackend extends EventEmitter {
     this.rl = createInterface({ input: this.child.stdout! });
 
     this.child.on('error', (error) => {
-      logger.error(`[ClaudeAgent] Process error: ${error.message}`);
+      log.error({ error: error.message }, 'Process error');
       this.isInitialized = false;
     });
 
     this.child.on('close', (code) => {
-      logger.info(`[ClaudeAgent] Process exited with code ${code}`);
+      log.info({ code }, 'Process exited');
       this.isInitialized = false;
       this.rl?.close();
     });
 
     this.child.stderr!.on('data', (data) => {
-      logger.debug(`[Claude stderr] ${data.toString()}`);
+      log.debug({ stderr: data.toString() }, 'Claude stderr');
     });
 
     this.isInitialized = true;
@@ -476,7 +478,7 @@ export class ClaudeAgentBackend extends EventEmitter {
     for (const ctrl of this.cancelControllers.values()) ctrl.abort();
     this.cancelControllers.clear();
     if (this.child && !this.child.killed) {
-      logger.info('[ClaudeAgent] Destroying process');
+      log.info('Destroying process');
       this.child.kill('SIGTERM');
     }
     this.rl?.close();

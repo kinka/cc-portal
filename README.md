@@ -10,26 +10,45 @@
 - 🔄 进程复用机制，避免重复启动开销
 - 🛠️ 支持自定义模型、allowedTools/disallowedTools、MCP、maxTurns
 - 🔐 权限模式对齐 happy-cli：permissionMode（default/acceptEdits/bypassPermissions/plan）、程序化 canCallTool
+- 🔐 **HTTP 工具审批**：支持 HTTP/REST 审批流程（SSE 实时推送、pending-permissions 队列）
 - 📝 会话管理和历史记录
 - 🎯 完善的生命周期管理
 
 ## 架构
 
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   HTTP API      │────▶│ ClaudeSession    │────▶│ClaudeAgentBackend│
-│  (Fastify)      │     │  - 会话管理       │     │  - 进程复用      │
-└─────────────────┘     │  - 消息历史       │     │  - 流式通信      │
-                        └──────────────────┘     └─────────────────┘
-                                                        │
-                              ┌─────────────────────────┘
-                              │ spawn once, reuse
-                              ▼
-                        ┌──────────────────┐
-                        │  Claude Process  │
-                        │  stdin/stdout    │
-                        │  JSON streaming  │
-                        └──────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           HTTP API (Fastify)                            │
+├─────────────────────────────────────────────────────────────────────────┤
+│  POST /sessions          │  GET /sessions/:id/stream (SSE)              │
+│  GET  /sessions          │  GET /sessions/:id/pending-permissions (?stream=1) │
+│  POST /sessions/:id/messages  │  POST /sessions/:id/permissions/:requestId   │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         ClaudeSession (EventEmitter)                    │
+├─────────────────────────────────────────────────────────────────────────┤
+│  - 会话管理    │  - 消息历史    │  - 待审批队列 Map<requestId, Pending>   │
+│  - Event: 'permissionPending'  │  - Event: 'permissionResolved'           │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      ClaudeAgentBackend (EventEmitter)                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│  - 进程复用    │  - 单读循环    │  - control 协议处理    │  - SSE chunks   │
+│  - Event: 'permissionRequest' → StreamChunk with type: 'permission_request' │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                          spawn once, reuse
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           Claude Process                                │
+├─────────────────────────────────────────────────────────────────────────┤
+│  stdin/stdout JSON streaming  │  --permission-mode default/bypass/...    │
+│  control_request (can_use_tool) → waitForPermission → HTTP 审批          │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 核心优化

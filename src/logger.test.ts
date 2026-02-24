@@ -1,86 +1,40 @@
-import { describe, test, expect, spyOn, beforeEach, afterEach } from "bun:test";
-import { logger } from './logger';
+import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import pino from 'pino';
 
 describe('logger', () => {
-  let consoleLogSpy: ReturnType<typeof spyOn>;
-  let consoleErrorSpy: ReturnType<typeof spyOn>;
-  let consoleWarnSpy: ReturnType<typeof spyOn>;
-
-  beforeEach(() => {
-    consoleLogSpy = spyOn(console, 'log').mockImplementation(() => {});
-    consoleErrorSpy = spyOn(console, 'error').mockImplementation(() => {});
-    consoleWarnSpy = spyOn(console, 'warn').mockImplementation(() => {});
-  });
-
-  afterEach(() => {
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
-    consoleWarnSpy.mockRestore();
-    delete process.env.DEBUG;
-  });
-
-  describe('info', () => {
-    test('should log info message', () => {
-      logger.info('test message');
-      expect(consoleLogSpy).toHaveBeenCalled();
-      const call = consoleLogSpy.mock.calls[0];
-      expect(call[0]).toContain('[INFO]');
-      expect(call[1]).toBe('test message');
+  describe('pino basic functionality', () => {
+    test('should create logger with correct level', () => {
+      const logger = pino({ level: 'info' });
+      expect(logger.level).toBe('info');
     });
 
-    test('should log multiple arguments', () => {
-      logger.info('message', { key: 'value' }, 123);
-      expect(consoleLogSpy).toHaveBeenCalled();
-      const call = consoleLogSpy.mock.calls[0];
-      expect(call[1]).toBe('message');
-      expect(call[2]).toEqual({ key: 'value' });
-      expect(call[3]).toBe(123);
+    test('should create child logger with context', () => {
+      const logger = pino({ level: 'debug' });
+      const child = logger.child({ module: 'test' });
+      expect(child).toBeDefined();
     });
   });
 
-  describe('error', () => {
-    test('should log error message', () => {
-      logger.error('error message');
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      const call = consoleErrorSpy.mock.calls[0];
-      expect(call[0]).toContain('[ERROR]');
-      expect(call[1]).toBe('error message');
+  describe('createLogger', () => {
+    test('should create child logger with context', async () => {
+      const { createLogger } = await import('./logger');
+      const log = createLogger({ module: 'TestModule' });
+      expect(log).toBeDefined();
+      expect(typeof log.info).toBe('function');
+      expect(typeof log.error).toBe('function');
+      expect(typeof log.warn).toBe('function');
+      expect(typeof log.debug).toBe('function');
     });
   });
 
-  describe('warn', () => {
-    test('should log warning message', () => {
-      logger.warn('warning message');
-      expect(consoleWarnSpy).toHaveBeenCalled();
-      const call = consoleWarnSpy.mock.calls[0];
-      expect(call[0]).toContain('[WARN]');
-      expect(call[1]).toBe('warning message');
-    });
-  });
-
-  describe('debug', () => {
-    test('should not log debug message when DEBUG is not set', () => {
-      logger.debug('debug message');
-      expect(consoleLogSpy).not.toHaveBeenCalled();
-    });
-
-    test('should log debug message when DEBUG is set', () => {
-      process.env.DEBUG = 'true';
-      logger.debug('debug message');
-      expect(consoleLogSpy).toHaveBeenCalled();
-      const call = consoleLogSpy.mock.calls[0];
-      expect(call[0]).toContain('[DEBUG]');
-      expect(call[1]).toBe('debug message');
-    });
-  });
-
-  describe('success', () => {
-    test('should log success message', () => {
-      logger.success('success message');
-      expect(consoleLogSpy).toHaveBeenCalled();
-      const call = consoleLogSpy.mock.calls[0];
-      expect(call[0]).toContain('[SUCCESS]');
-      expect(call[1]).toBe('success message');
+  describe('logger methods', () => {
+    test('should have all required methods', async () => {
+      const { logger } = await import('./logger');
+      expect(typeof logger.info).toBe('function');
+      expect(typeof logger.error).toBe('function');
+      expect(typeof logger.warn).toBe('function');
+      expect(typeof logger.debug).toBe('function');
+      expect(typeof logger.child).toBe('function');
     });
   });
 });

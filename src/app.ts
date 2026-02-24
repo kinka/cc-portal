@@ -2,14 +2,27 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { realpathSync } from 'node:fs';
 import { ClaudeSessionManager } from './ClaudeSessionManager';
 import type { PermissionResult } from './sdk-types';
-import { logger } from './logger';
+import { logger, isDev } from './logger';
 
-/**
- * Build Fastify app with all routes. Optional sessionManager for testing.
- */
 export function buildApp(sessionManager?: ClaudeSessionManager): FastifyInstance {
   const manager = sessionManager ?? new ClaudeSessionManager();
-  const fastify = Fastify({ logger: false });
+  const fastify = Fastify({
+    logger: {
+      level: process.env.LOG_LEVEL || (isDev ? 'debug' : 'info'),
+      transport: isDev
+        ? {
+            target: 'pino-pretty',
+            options: {
+              colorize: true,
+              translateTime: 'SYS:standard',
+              ignore: 'pid,hostname',
+            },
+          }
+        : undefined,
+    },
+    requestIdLogLabel: 'reqId',
+    genReqId: () => crypto.randomUUID(),
+  });
 
   fastify.addHook('onSend', async (_request, reply, payload) => {
     reply.header('Access-Control-Allow-Origin', '*');
@@ -63,7 +76,7 @@ export function buildApp(sessionManager?: ClaudeSessionManager): FastifyInstance
 
     try {
       const realPath = realpathSync(body.path);
-      logger.info(`[Session] Creating session with path: ${body.path} -> ${realPath}`);
+      logger.info({ path: body.path, realPath }, 'Creating session');
 
       const session = manager.createSession({
         path: realPath,
@@ -86,7 +99,7 @@ export function buildApp(sessionManager?: ClaudeSessionManager): FastifyInstance
         createdAt: session.createdAt.toISOString(),
       };
     } catch (error) {
-      logger.error('Failed to create session:', error);
+      logger.error({ error }, 'Failed to create session');
       reply.status(500);
       return { error: 'Failed to create session', message: String(error) };
     }
@@ -128,7 +141,7 @@ export function buildApp(sessionManager?: ClaudeSessionManager): FastifyInstance
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
-      logger.error('Failed to send message:', error);
+      logger.error({ error, sessionId }, 'Failed to send message');
       reply.status(500);
       return { error: 'Failed to send message', message: String(error) };
     }
@@ -161,7 +174,7 @@ export function buildApp(sessionManager?: ClaudeSessionManager): FastifyInstance
       reply.raw.write('data: [DONE]\n\n');
       reply.raw.end();
     } catch (error) {
-      logger.error('Stream error:', error);
+      logger.error({ error: String(error), sessionId }, 'Stream error');
       reply.raw.write(`data: ${JSON.stringify({ error: String(error) })}\n\n`);
       reply.raw.end();
     }
