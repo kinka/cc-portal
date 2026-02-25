@@ -13,9 +13,13 @@ const start = async () => {
   // Initialize database
   const db = new DatabaseManager(dbPath);
 
+  const port = parseInt(process.env.PORT || '3333', 10);
+  const agentApiBaseUrl = process.env.CC_AGENTS_URL || `http://localhost:${port}`;
+
   // Initialize session manager
   const manager = new ClaudeSessionManager(db, {
     usersDir: process.env.USERS_DIR || './users',
+    agentApiBaseUrl,
   });
 
   // Build Fastify app with database and session manager
@@ -23,10 +27,9 @@ const start = async () => {
 
   const startServer = async () => {
     try {
-      const port = parseInt(process.env.PORT || '3333', 10);
       const host = process.env.HOST || '0.0.0.0';
 
-      await fastify.listen({ port, host });
+      await fastify.listen({ port: port, host });
       logger.info({ host, port }, 'Claude Agent HTTP Service running');
       logger.info('Available endpoints:');
       logger.info('  GET  /health                               - Health check');

@@ -4,6 +4,15 @@ import { ClaudeAgentBackend, type StreamChunk } from './ClaudeAgentBackend';
 import type { CanCallToolCallback, PermissionMode, PermissionResult } from './sdk-types';
 import { createLogger } from './logger';
 
+/** Session context injected into each message prompt for multi-user awareness and agent discovery. */
+export interface SessionContext {
+  apiBaseUrl: string;
+  userId: string;
+  sessionId: string;
+  ownerId: string;
+  participants: string[];
+}
+
 export interface ClaudeSessionOptions {
   id: string;
   path: string;
@@ -24,6 +33,12 @@ export interface ClaudeSessionOptions {
   bypassPermission?: boolean;
   /** Whether this is a brand new session (--session-id) or resuming existing (--resume). Default true. */
   isNewSession?: boolean;
+  /** Owner user ID for multi-user sessions. */
+  ownerId?: string;
+  /** Initial list of participant user IDs (besides owner). */
+  initialParticipants?: string[];
+  /** API base URL and auth info for injecting into session context header. */
+  sessionContext?: { apiBaseUrl: string; userId: string };
 }
 
 /** One pending tool approval request (HTTP flow). */
@@ -64,6 +79,9 @@ export class ClaudeSession extends EventEmitter {
   private messages: Message[] = [];
   private pendingPermissions = new Map<string, PendingPermission>();
   private permissionTimeoutMs: number;
+  private participants: Set<string> = new Set();
+  private ownerId: string = '';
+  private sessionContext?: SessionContext;
 
   constructor(options: ClaudeSessionOptions) {
     super();
@@ -73,6 +91,18 @@ export class ClaudeSession extends EventEmitter {
     this.createdAt = new Date();
     this.claudeSessionId = options.id; // Use session ID as Claude session ID
     this.permissionTimeoutMs = options.permissionTimeoutMs ?? 300_000;
+    this.ownerId = options.ownerId ?? '';
+    for (const p of options.initialParticipants ?? []) {
+      this.participants.add(p);
+    }
+    if (options.sessionContext) {
+      this.sessionContext = {
+        ...options.sessionContext,
+        sessionId: this.id,
+        ownerId: this.ownerId,
+        participants: [this.ownerId, ...this.participants].filter(Boolean),
+      };
+    }
 
     const needsPermissionResolver =
       !options.canCallTool &&
@@ -102,6 +132,19 @@ export class ClaudeSession extends EventEmitter {
         this.log.error({ err }, 'Initial message failed')
       );
     }
+  }
+
+  /** Add a participant to this session and update session context participants list. */
+  addParticipant(userId: string): void {
+    this.participants.add(userId);
+    if (this.sessionContext) {
+      this.sessionContext.participants = [this.ownerId, ...this.participants].filter(Boolean);
+    }
+  }
+
+  /** Get the full list of participants (owner + joined users). */
+  getParticipants(): string[] {
+    return [this.ownerId, ...this.participants].filter(Boolean);
   }
 
   /** Used by backend when permissionResolver is set: enqueue request and wait for respondToPermission. */
@@ -158,11 +201,29 @@ export class ClaudeSession extends EventEmitter {
 
   /**
    * Build the prompt string to send to Claude.
-   * When `from` is provided, prefixes the content with `[from]: ` so Claude
-   * is aware of which participant is speaking in a multi-user session.
+   * - Single-user (no context or participants.length <= 1): prefixes with `[from]: ` when from is set.
+   * - Multi-user (context with participants.length > 1): injects full Session Context header so Claude
+   *   is aware of participants, the API endpoint, and who is currently speaking.
    * The original `content` stored in message history is never modified.
    */
-  static buildPrompt(content: string, from?: string): string {
+  static buildPrompt(content: string, from?: string, context?: SessionContext): string {
+    const isMultiUser = context && context.participants.length > 1;
+    if (isMultiUser) {
+      const lines = [
+        '[Session Context]',
+        `CC-Agents API: ${context.apiBaseUrl}`,
+        `Auth header: X-User-ID: ${context.userId}`,
+        `Your session ID: ${context.sessionId}`,
+        '',
+        'This is a multi-user session.',
+        `Owner: ${context.ownerId}`,
+        `Participants: ${context.participants.join(', ')}`,
+        `Current speaker: ${from ?? context.userId}`,
+        '',
+        from ? `[${from}]: ${content}` : content,
+      ];
+      return lines.join('\n');
+    }
     return from ? `[${from}]: ${content}` : content;
   }
 
@@ -176,8 +237,10 @@ export class ClaudeSession extends EventEmitter {
       from,
     });
 
+    // Build prompt with session context for multi-user awareness
+    const ctx = this.participants.size > 0 ? this.sessionContext : undefined;
     // Query Claude with sender-prefixed prompt so Claude knows who is speaking
-    const response = await this.backend.query(ClaudeSession.buildPrompt(content, from));
+    const response = await this.backend.query(ClaudeSession.buildPrompt(content, from, ctx));
 
     // Add assistant message
     this.messages.push({
@@ -206,10 +269,12 @@ export class ClaudeSession extends EventEmitter {
 
     let fullResponse = '';
 
+    // Build prompt with session context for multi-user awareness
+    const ctx = this.participants.size > 0 ? this.sessionContext : undefined;
     // Query Claude with sender-prefixed prompt
     try {
       for await (const chunk of this.backend.queryStream(
-        content !== undefined && content !== null ? ClaudeSession.buildPrompt(content, from) : content
+        content !== undefined && content !== null ? ClaudeSession.buildPrompt(content, from, ctx) : content
       )) {
         if (chunk.type === 'text' && chunk.content) {
           fullResponse += chunk.content;

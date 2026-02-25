@@ -31,6 +31,42 @@ describe('ClaudeSession.buildPrompt', () => {
   test('multiline content preserves newlines', () => {
     expect(ClaudeSession.buildPrompt('line1\nline2', 'alice')).toBe('[alice]: line1\nline2');
   });
+
+  test('multi-user: injects session context header', () => {
+    const ctx = {
+      apiBaseUrl: 'http://localhost:3333',
+      userId: 'alice',
+      sessionId: 'sid-123',
+      ownerId: 'alice',
+      participants: ['alice', 'bob'],
+    };
+    const result = ClaudeSession.buildPrompt('hello', 'bob', ctx);
+    expect(result).toContain('[Session Context]');
+    expect(result).toContain('CC-Agents API: http://localhost:3333');
+    expect(result).toContain('Auth header: X-User-ID: alice');
+    expect(result).toContain('Your session ID: sid-123');
+    expect(result).toContain('Participants: alice, bob');
+    expect(result).toContain('Current speaker: bob');
+    expect(result).toContain('[bob]: hello');
+  });
+
+  test('single-user: no context header even if context provided', () => {
+    const ctx = {
+      apiBaseUrl: 'http://localhost:3333',
+      userId: 'alice',
+      sessionId: 'sid-123',
+      ownerId: 'alice',
+      participants: ['alice'],
+    };
+    const result = ClaudeSession.buildPrompt('hello', 'alice', ctx);
+    expect(result).toBe('[alice]: hello');
+    expect(result).not.toContain('[Session Context]');
+  });
+
+  test('no context: behaves like original buildPrompt', () => {
+    expect(ClaudeSession.buildPrompt('hello', 'alice', undefined)).toBe('[alice]: hello');
+    expect(ClaudeSession.buildPrompt('hello', undefined, undefined)).toBe('hello');
+  });
 });
 
 describe('API (no claude)', () => {
@@ -763,7 +799,7 @@ describe('Cross-Session Messaging', () => {
   });
 });
 
-describe('Cross-User Notifications', () => {
+describe('User Directory', () => {
   test('search users returns empty when no users', async () => {
     const db = new DatabaseManager(':memory:');
     const manager = new ClaudeSessionManager(db, { usersDir: './test-users' });
@@ -844,139 +880,6 @@ describe('Cross-User Notifications', () => {
     }
   });
 
-  test('send notification between users', async () => {
-    const db = new DatabaseManager(':memory:');
-    const manager = new ClaudeSessionManager(db, { usersDir: './test-users' });
-    const app = buildApp({ sessionManager: manager, db });
-    await app.listen({ port: 0, host: '127.0.0.1' });
-    const port = (app.server!.address() as { port: number }).port;
-    const base = `http://127.0.0.1:${port}`;
-    const senderId = 'sender-1';
-    const receiverId = 'receiver-1';
-
-    try {
-      // Setup: allow messages from everyone
-      await fetch(`${base}/me/profile`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': receiverId },
-        body: JSON.stringify({ messagePermission: 'everyone' }),
-      });
-
-      // Send notification
-      const notifyRes = await fetch(`${base}/users/${receiverId}/notify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': senderId },
-        body: JSON.stringify({
-          type: 'alert',
-          content: 'You have a new task!',
-        }),
-      });
-      expect(notifyRes.status).toBe(200);
-      const notifyBody = (await notifyRes.json()) as { notificationId: string };
-      expect(notifyBody.notificationId).toBeDefined();
-
-      // Receiver checks notifications
-      const notifRes = await fetch(`${base}/me/notifications`, {
-        headers: { 'X-User-ID': receiverId },
-      });
-      expect(notifRes.status).toBe(200);
-      const notifBody = (await notifRes.json()) as {
-        notifications: Array<{ id: string; content: string; initiatorUserId: string }>;
-        unread: number;
-      };
-      expect(notifBody.notifications.length).toBe(1);
-      expect(notifBody.notifications[0].content).toBe('You have a new task!');
-      expect(notifBody.notifications[0].fromUserId).toBe(senderId);
-      expect(notifBody.unread).toBe(1);
-    } finally {
-      await app.close();
-    }
-  });
-
-  test('notification blocked by permission settings', async () => {
-    const db = new DatabaseManager(':memory:');
-    const manager = new ClaudeSessionManager(db, { usersDir: './test-users' });
-    const app = buildApp({ sessionManager: manager, db });
-    await app.listen({ port: 0, host: '127.0.0.1' });
-    const port = (app.server!.address() as { port: number }).port;
-    const base = `http://127.0.0.1:${port}`;
-    const senderId = 'sender-2';
-    const receiverId = 'receiver-2';
-
-    try {
-      // Setup: block all messages
-      await fetch(`${base}/me/profile`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': receiverId },
-        body: JSON.stringify({ messagePermission: 'none' }),
-      });
-
-      // Try to send notification (should be blocked)
-      const notifyRes = await fetch(`${base}/users/${receiverId}/notify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': senderId },
-        body: JSON.stringify({
-          type: 'alert',
-          content: 'This should be blocked',
-        }),
-      });
-      expect(notifyRes.status).toBe(403);
-    } finally {
-      await app.close();
-    }
-  });
-
-  test('mark notification as read', async () => {
-    const db = new DatabaseManager(':memory:');
-    const manager = new ClaudeSessionManager(db, { usersDir: './test-users' });
-    const app = buildApp({ sessionManager: manager, db });
-    await app.listen({ port: 0, host: '127.0.0.1' });
-    const port = (app.server!.address() as { port: number }).port;
-    const base = `http://127.0.0.1:${port}`;
-    const senderId = 'sender-3';
-    const receiverId = 'receiver-3';
-
-    try {
-      // Setup
-      await fetch(`${base}/me/profile`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': receiverId },
-        body: JSON.stringify({ messagePermission: 'everyone' }),
-      });
-
-      // Send notification
-      const notifyRes = await fetch(`${base}/users/${receiverId}/notify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': senderId },
-        body: JSON.stringify({ type: 'info', content: 'Test notification' }),
-      });
-      const notifyBody = (await notifyRes.json()) as { notificationId: string };
-
-      // Get unread notifications
-      const unreadRes = await fetch(`${base}/me/notifications?unread=1`, {
-        headers: { 'X-User-ID': receiverId },
-      });
-      const unreadBody = (await unreadRes.json()) as { unread: number };
-      expect(unreadBody.unread).toBe(1);
-
-      // Mark as read
-      const readRes = await fetch(`${base}/me/notifications/${notifyBody.notificationId}/read`, {
-        method: 'POST',
-        headers: { 'X-User-ID': receiverId },
-      });
-      expect(readRes.status).toBe(200);
-
-      // Verify no more unread
-      const unreadRes2 = await fetch(`${base}/me/notifications?unread=1`, {
-        headers: { 'X-User-ID': receiverId },
-      });
-      const unreadBody2 = (await unreadRes2.json()) as { notifications: unknown[]; unread: number };
-      expect(unreadBody2.notifications.length).toBe(0);
-      expect(unreadBody2.unread).toBe(0);
-    } finally {
-      await app.close();
-    }
-  });
 });
 
 describe('Shared Session (direct participant add)', () => {

@@ -1,11 +1,16 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { DatabaseManager } from '../db';
+import type { ClaudeSessionManager } from '../ClaudeSessionManager';
 import { requireUserContext } from '../middleware/auth';
 import { createLogger } from '../logger';
 
 const log = createLogger({ module: 'SessionParticipants' });
 
-export function registerParticipantRoutes(fastify: FastifyInstance, db: DatabaseManager): void {
+export function registerParticipantRoutes(
+  fastify: FastifyInstance,
+  db: DatabaseManager,
+  manager?: ClaudeSessionManager,
+): void {
   /**
    * POST /sessions/:sessionId/participants
    * Directly add a user as a joined participant (no confirmation needed).
@@ -42,6 +47,9 @@ export function registerParticipantRoutes(fastify: FastifyInstance, db: Database
       reply.status(500);
       return { error: 'Failed to add participant' };
     }
+
+    // Sync in-memory session state so subsequent messages see the updated participants list
+    manager?.getSessionDirect(sessionId)?.addParticipant(targetUserId);
 
     log.info({ sessionId, owner: userContext.userId, participant: targetUserId }, 'Participant added directly');
     return { success: true };

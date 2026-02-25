@@ -7,8 +7,6 @@ export interface UserProfile {
   displayName?: string;
   skills?: string[];
   currentProjects?: string[];
-  /** Controls who can send this user notifications/messages */
-  messagePermission: 'everyone' | 'contacts' | 'project_members' | 'none';
   registeredAt: Date;
   lastActiveAt: Date;
 }
@@ -31,7 +29,6 @@ export class UserDirectory {
     }
     const profile: UserProfile = {
       userId,
-      messagePermission: 'everyone',
       registeredAt: new Date(),
       lastActiveAt: new Date(),
       ...partial,
@@ -77,28 +74,6 @@ export class UserDirectory {
     return Array.from(this.profiles.values()).filter(p =>
       p.currentProjects?.includes(projectName)
     );
-  }
-
-  /**
-   * Check whether targetUser can receive a message from fromUser.
-   * Returns true if allowed.
-   */
-  canReceiveFrom(targetUserId: string, fromUserId: string): boolean {
-    const target = this.profiles.get(targetUserId);
-    if (!target) return true; // Unknown user: allow by default
-    switch (target.messagePermission) {
-      case 'everyone': return true;
-      case 'none': return false;
-      case 'contacts':
-        // Future: check contacts list. For now treat same as everyone.
-        return true;
-      case 'project_members': {
-        if (!target.currentProjects?.length) return false;
-        const from = this.profiles.get(fromUserId);
-        if (!from) return false;
-        return target.currentProjects.some(p => from.currentProjects?.includes(p));
-      }
-    }
   }
 
   /** Update lastActiveAt timestamp for a user */

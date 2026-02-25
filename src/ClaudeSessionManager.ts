@@ -4,6 +4,7 @@ import { resolve, normalize, isAbsolute } from 'node:path';
 import { ClaudeSession } from './ClaudeSession';
 import { createLogger } from './logger';
 import type { DatabaseManager } from './db';
+import { UserMemoryInitializer } from './UserMemoryInitializer';
 
 const log = createLogger({ module: 'SessionManager' });
 
@@ -48,13 +49,17 @@ interface ActiveSessionEntry {
 export class ClaudeSessionManager {
   private sessions = new Map<string, ActiveSessionEntry>();
   private usersDir: string;
+  private agentApiBaseUrl?: string;
   private sessionLoadingLocks = new Map<string, Promise<ClaudeSession | undefined>>();
+  private memoryInitializer: UserMemoryInitializer;
 
   constructor(
     private db: DatabaseManager,
-    options: { usersDir?: string } = {}
+    options: { usersDir?: string; agentApiBaseUrl?: string } = {}
   ) {
     this.usersDir = resolve(options.usersDir || process.env.USERS_DIR || './users');
+    this.agentApiBaseUrl = options.agentApiBaseUrl;
+    this.memoryInitializer = new UserMemoryInitializer({ usersDir: this.usersDir });
     this.loadActiveSessionsFromDb();
   }
 
@@ -86,9 +91,10 @@ export class ClaudeSessionManager {
       return targetPath;
     }
 
-    const userDir = resolve(this.usersDir, ownerId);
-    await mkdir(userDir, { recursive: true });
+    // 自动初始化用户记忆系统（会创建用户目录和 CLAUDE.md、kernel.md）
+    await this.memoryInitializer.ensureUserMemory(ownerId);
 
+    const userDir = resolve(this.usersDir, ownerId);
     let targetPath: string;
 
     if (!path) {
@@ -141,6 +147,10 @@ export class ClaudeSessionManager {
         envVars: options.envVars,
         initialMessage: options.initialMessage,
         bypassPermission: options.bypassPermission,
+        ownerId,
+        sessionContext: this.agentApiBaseUrl
+          ? { apiBaseUrl: this.agentApiBaseUrl, userId: ownerId }
+          : undefined,
       });
 
       this.sessions.set(sessionId, {
@@ -162,6 +172,12 @@ export class ClaudeSessionManager {
       this.db.deleteSession(sessionId);
       throw error;
     }
+  }
+
+  /** Get an active session directly without permission checks. For internal use only. */
+  getSessionDirect(sessionId: string): ClaudeSession | undefined {
+    const entry = this.sessions.get(sessionId);
+    return entry?.session instanceof ClaudeSession ? entry.session : undefined;
   }
 
   async getSession(sessionId: string, userId: string): Promise<ClaudeSession | undefined> {

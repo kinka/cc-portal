@@ -1,3 +1,6 @@
+import { MemoryManager } from './memory/MemoryManager';
+import { registerMemoryRoutes } from './routes/memoryRoutes';
+
 import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyReply } from 'fastify';
 import { realpathSync } from 'node:fs';
 import { ClaudeSessionManager } from './ClaudeSessionManager';
@@ -9,7 +12,6 @@ import { registerAdminRoutes } from './admin-routes';
 import { SessionRegistry } from './crossSession/SessionRegistry';
 import { MessageRouter } from './crossSession/MessageRouter';
 import { UserDirectory } from './crossSession/UserDirectory';
-import { CrossUserNotifier } from './crossSession/CrossUserNotifier';
 import { SessionLinkManager } from './crossSession/SessionLinkManager';
 import { registerCrossSessionRoutes } from './routes/crossSessionRoutes';
 import { registerCrossUserRoutes } from './routes/crossUserRoutes';
@@ -20,6 +22,8 @@ interface BuildAppOptions {
   db?: DatabaseManager;
   /** Override for testing; prod creates its own instances */
   registry?: SessionRegistry;
+  /** Memory manager for long-term user memory */
+  memoryManager?: MemoryManager;
 }
 
 export function buildApp(options?: BuildAppOptions): FastifyInstance {
@@ -34,8 +38,10 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
   const registry = options.registry ?? new SessionRegistry();
   const messageRouter = new MessageRouter(registry);
   const userDirectory = new UserDirectory();
-  const crossUserNotifier = new CrossUserNotifier(userDirectory, registry);
   const sessionLinkManager = new SessionLinkManager(registry, userDirectory);
+  
+  // Memory manager for long-term user memory
+  const memoryManager = options.memoryManager ?? new MemoryManager('./memory');
   const fastify = Fastify({
     logger: {
       level: process.env.LOG_LEVEL || (isDev ? 'debug' : 'info'),
@@ -78,12 +84,17 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
 
   // Register cross-session / cross-user / session-link routes
   registerCrossSessionRoutes(fastify, messageRouter, registry);
-  registerCrossUserRoutes(fastify, userDirectory, crossUserNotifier);
+  registerCrossUserRoutes(fastify, userDirectory);
   registerSessionLinkRoutes(fastify, sessionLinkManager, registry, userDirectory);
 
   // Register participant routes
   if (db) {
-    registerParticipantRoutes(fastify, db);
+    registerParticipantRoutes(fastify, db, manager ?? undefined);
+  }
+
+  // Register memory routes
+  if (db) {
+    registerMemoryRoutes(fastify, memoryManager);
   }
 
   fastify.get('/health', async () => {
