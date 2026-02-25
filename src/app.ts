@@ -132,6 +132,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
     const userContext = requireUserContext(request);
 
     const body = request.body as {
+      ownerId?: string;
       path?: string;
       project?: string;
       initialMessage?: string;
@@ -146,22 +147,27 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
       bypassPermission?: boolean;
     };
 
+    // Allow caller to create a session on behalf of another user (agent delegation)
+    const ownerId = body.ownerId ?? userContext.userId;
+
     try {
-      const currentCount = manager.getUserSessionCount(userContext.userId);
-      if (currentCount >= userContext.maxSessions) {
+      const currentCount = manager.getUserSessionCount(ownerId);
+      const targetUser = db.getUser(ownerId);
+      const maxSessions = targetUser?.maxSessions ?? userContext.maxSessions;
+      if (currentCount >= maxSessions) {
         reply.status(429);
         return {
           error: 'Session quota exceeded',
-          message: `You have reached the maximum of ${userContext.maxSessions} sessions`,
+          message: `User ${ownerId} has reached the maximum of ${maxSessions} sessions`,
           quota: {
-            max: userContext.maxSessions,
+            max: maxSessions,
             used: currentCount,
           },
         };
       }
 
       const session = await manager.createSession({
-        ownerId: userContext.userId,
+        ownerId,
         path: body.path,
         project: body.project,
         initialMessage: body.initialMessage,
@@ -177,9 +183,9 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
       });
 
       // Register in cross-session registry
-      registry.register(session.id, userContext.userId, body.project);
+      registry.register(session.id, ownerId, body.project);
       // Auto-touch user in directory
-      userDirectory.upsertProfile(userContext.userId);
+      userDirectory.upsertProfile(ownerId);
 
       return {
         sessionId: session.id,
