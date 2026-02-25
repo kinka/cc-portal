@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CC-Agents 共享 Session 架构图</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 40px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    h1 {
+      font-size: 2.5rem;
+      background: linear-gradient(135deg, #58a6ff, #7ee787);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      color: #8b949e;
+      font-size: 1.1rem;
+    }
+    
+    /* Architecture Layers */
+    .layer {
+      margin-bottom: 30px;
+      padding: 20px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+    }
+    .layer-title {
+      font-size: 1.2rem;
+      font-weight: bold;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .layer-title.blue { color: #58a6ff; }
+    .layer-title.green { color: #7ee787; }
+    .layer-title.pink { color: #f778ba; }
+    .layer-title.amber { color: #d29922; }
+    
+    /* Components Grid */
+    .components {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+    }
+    .component {
+      background: #0d1117;
+      border: 2px solid;
+      border-radius: 8px;
+      padding: 15px;
+      text-align: center;
+    }
+    .component.blue { border-color: #58a6ff; }
+    .component.green { border-color: #7ee787; }
+    .component.pink { border-color: #f778ba; }
+    .component.amber { border-color: #d29922; }
+    .component-title {
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+    .component-desc {
+      font-size: 0.85rem;
+      color: #8b949e;
+    }
+    .component-list {
+      font-size: 0.8rem;
+      color: #8b949e;
+      text-align: left;
+      margin-top: 10px;
+      padding-left: 10px;
+    }
+    .component-list li {
+      margin-bottom: 5px;
+    }
+    
+    /* Database Tables */
+    .tables {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 15px;
+    }
+    .table {
+      background: #0d1117;
+      border: 2px solid #f778ba;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .table-header {
+      background: #21262d;
+      padding: 10px 15px;
+      font-weight: bold;
+      color: #f778ba;
+    }
+    .table-body {
+      padding: 15px;
+    }
+    .table-body li {
+      margin-bottom: 8px;
+      font-size: 0.9rem;
+      color: #8b949e;
+    }
+    
+    /* Flow Section */
+    .flow-section {
+      margin-top: 30px;
+      padding: 20px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+    }
+    .flow-title {
+      font-size: 1.3rem;
+      font-weight: bold;
+      margin-bottom: 20px;
+      color: #c9d1d9;
+    }
+    .flow-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    .flow-step {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    .step-number {
+      width: 30px;
+      height: 30px;
+      background: #58a6ff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: #0d1117;
+      flex-shrink: 0;
+    }
+    .step-content {
+      flex: 1;
+      padding: 12px 15px;
+      background: #0d1117;
+      border-radius: 8px;
+      border-left: 3px solid #58a6ff;
+    }
+    .step-title {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    .step-detail {
+      font-size: 0.9rem;
+      color: #8b949e;
+    }
+    
+    /* Legend */
+    .legend {
+      margin-top: 30px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+    }
+    .legend-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .legend-title {
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #c9d1d9;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-size: 0.9rem;
+      color: #8b949e;
+    }
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+    }
+    .legend-color.blue { background: #58a6ff; }
+    .legend-color.green { background: #7ee787; }
+    .legend-color.pink { background: #f778ba; }
+    .legend-color.amber { background: #d29922; }
+    
+    /* Connections */
+    .connections {
+      margin-top: 20px;
+      padding: 20px;
+      background: #0d1117;
+      border-radius: 8px;
+    }
+    .connection {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 12px;
+      font-size: 0.9rem;
+    }
+    .connection-arrow {
+      color: #58a6ff;
+      font-weight: bold;
+    }
+    
+    footer {
+      margin-top: 40px;
+      text-align: center;
+      color: #8b949e;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>👥 CC-Agents 共享 Session 架构</h1>
+      <p class="subtitle">多用户实时协作系统 | 群聊模式</p>
+    </header>
+
+    <!-- Frontend Layer -->
+    <div class="layer">
+      <div class="layer-title blue">🖥️ Frontend 层</div>
+      <div class="components">
+        <div class="component green">
+          <div class="component-title">Alice</div>
+          <div class="component-desc">User A - Session 创建者</div>
+        </div>
+        <div class="component blue">
+          <div class="component-title">chat-demo.html</div>
+          <div class="component-desc">双用户演示界面</div>
+        </div>
+        <div class="component blue">
+          <div class="component-title">simple-demo.html</div>
+          <div class="component-desc">单用户模式 (支持 URL 指定用户)</div>
+        </div>
+        <div class="component pink">
+          <div class="component-title">Bob</div>
+          <div class="component-desc">User B - Session 参与者</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- API Layer -->
+    <div class="layer">
+      <div class="layer-title amber">🔌 HTTP API (Fastify)</div>
+      <div class="components">
+        <div class="component amber">
+          <div class="component-title">POST /sessions</div>
+          <div class="component-desc">创建 Session</div>
+        </div>
+        <div class="component amber">
+          <div class="component-title">POST /sessions/:id/invite</div>
+          <div class="component-desc">邀请用户</div>
+        </div>
+        <div class="component amber">
+          <div class="component-title">POST /sessions/:id/join</div>
+          <div class="component-desc">接受邀请</div>
+        </div>
+        <div class="component amber">
+          <div class="component-title">POST /sessions/:id/messages</div>
+          <div class="component-desc">发送消息</div>
+        </div>
+        <div class="component amber">
+          <div class="component-title">GET /sessions/:id/stream</div>
+          <div class="component-desc">SSE 流</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Core Services -->
+    <div class="layer">
+      <div class="layer-title blue">⚙️ Core Services</div>
+      <div class="components">
+        <div class="component blue">
+          <div class="component-title">ClaudeSessionManager</div>
+          <div class="component-desc">Session 管理器</div>
+          <ul class="component-list">
+            <li>• 生命周期管理</li>
+            <li>• 权限验证 (canAccessSession)</li>
+            <li>• 参与者管理</li>
+          </ul>
+        </div>
+        <div class="component green">
+          <div class="component-title">ClaudeSession</div>
+          <div class="component-desc">EventEmitter</div>
+          <ul class="component-list">
+            <li>• messages[] 历史记录</li>
+            <li>• pendingQueue 审批队列</li>
+            <li>• broadcast() 消息广播</li>
+          </ul>
+        </div>
+        <div class="component pink">
+          <div class="component-title">ClaudeAgentBackend</div>
+          <div class="component-desc">Claude CLI 进程</div>
+          <ul class="component-list">
+            <li>• 子进程管理</li>
+            <li>• stdin/stdout 通信</li>
+            <li>• stream-json 协议</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Database Layer -->
+    <div class="layer">
+      <div class="layer-title pink">🗄️ Database (SQLite)</div>
+      <div class="tables">
+        <div class="table">
+          <div class="table-header">users</div>
+          <div class="table-body">
+            <ul>
+              <li>id (TEXT PRIMARY KEY)</li>
+              <li>max_sessions (INTEGER) DEFAULT 200</li>
+              <li>created_at (DATETIME)</li>
+            </ul>
+          </div>
+        </div>
+        <div class="table">
+          <div class="table-header">sessions</div>
+          <div class="table-body">
+            <ul>
+              <li>id (TEXT PRIMARY KEY)</li>
+              <li>owner_id (TEXT) - FK to users</li>
+              <li>path (TEXT)</li>
+              <li>status (TEXT) - active/stopped/error</li>
+            </ul>
+          </div>
+        </div>
+        <div class="table">
+          <div class="table-header">session_participants</div>
+          <div class="table-body">
+            <ul>
+              <li>session_id (TEXT) - FK</li>
+              <li>user_id (TEXT)</li>
+              <li>status (TEXT) - pending/joined</li>
+              <li>invited_at, joined_at (DATETIME)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data Flow -->
+    <div class="flow-section">
+      <div class="flow-title">📊 数据流</div>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <div class="step-title">Alice 创建 Session</div>
+            <div class="step-detail">POST /sessions → 创建 session 记录 (owner_id=alice) → 返回 sessionId</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <div class="step-title">Alice 邀请 Bob</div>
+            <div class="step-detail">POST /sessions/:id/invite {userId: "bob"} → 创建 session_participants (status=pending)</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <div class="step-title">Bob 接受邀请</div>
+            <div class="step-detail">POST /sessions/:id/join → 更新 status=joined → Bob 成为参与者</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <div class="step-title">发送消息</div>
+            <div class="step-detail">任意参与者 POST /messages → Claude 处理 → SSE 广播给所有参与者</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-number">5</div>
+          <div class="step-content">
+            <div class="step-title">实时接收响应</div>
+            <div class="step-detail">所有参与者通过 GET /stream (SSE) 实时接收 Claude 的流式响应</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legend & Config -->
+    <div class="legend">
+      <div class="legend-card">
+        <div class="legend-title">📋 组件图例</div>
+        <div class="legend-item">
+          <div class="legend-color blue"></div>
+          <span>前端 / API / 管理服务</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color green"></div>
+          <span>Session / 用户 A</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color pink"></div>
+          <span>后端进程 / 数据库 / 用户 B</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color amber"></div>
+          <span>API 端点</span>
+        </div>
+      </div>
+      <div class="legend-card">
+        <div class="legend-title">📈 系统配置</div>
+        <div class="legend-item">
+          <span>• Max Sessions: 200 per user</span>
+        </div>
+        <div class="legend-item">
+          <span>• Max Participants: 200 per session</span>
+        </div>
+        <div class="legend-item">
+          <span>• Protocol: SSE (Server-Sent Events)</span>
+        </div>
+        <div class="legend-item">
+          <span>• Database: SQLite</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Connections -->
+    <div class="connections">
+      <div class="legend-title">🔗 数据流向</div>
+      <div class="connection">
+        <span>Frontend</span>
+        <span class="connection-arrow">→</span>
+        <span>HTTP API (Fastify)</span>
+        <span class="connection-arrow">→</span>
+        <span>ClaudeSessionManager</span>
+      </div>
+      <div class="connection">
+        <span>ClaudeSessionManager</span>
+        <span class="connection-arrow">→</span>
+        <span>ClaudeSession</span>
+        <span class="connection-arrow">→</span>
+        <span>ClaudeAgentBackend (Claude CLI)</span>
+      </div>
+      <div class="connection">
+        <span>All Components</span>
+        <span class="connection-arrow">⇄</span>
+        <span>SQLite Database</span>
+      </div>
+    </div>
+
+    <footer>
+      <p>CC-Agents Shared Session Architecture | 2025</p>
+      <p style="margin-top: 10px; font-size: 0.8rem;">文档位置: docs/ARCHITECTURE.md | 架构图: docs/architecture-diagram.html</p>
+    </footer>
+  </div>
+</body>
+</html>
