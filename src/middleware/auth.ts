@@ -19,11 +19,11 @@ interface AuthOptions {
 }
 
 export function registerAuthMiddleware(fastify: FastifyInstance, options: AuthOptions) {
-  const { db, defaultMaxSessions = 5 } = options;
+  const { db, defaultMaxSessions = 200 } = options;
 
-  fastify.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
-    // Skip auth for health check and admin routes (admin has its own auth)
-    if (request.url === '/health' || request.url.startsWith('/admin')) {
+fastify.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
+    // Skip auth for health check, admin routes, and OPTIONS (CORS preflight)
+    if (request.url === '/health' || request.url.startsWith('/admin') || request.method === 'OPTIONS') {
       return;
     }
 

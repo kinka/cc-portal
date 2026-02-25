@@ -39,7 +39,9 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  from?: string; // userId of the sender for multi-user sessions
 }
+
 
 interface PendingPermission {
   requestId: string;
@@ -154,17 +156,28 @@ export class ClaudeSession extends EventEmitter {
     }));
   }
 
-  async sendMessage(content: string): Promise<string> {
-    // Add user message
+  /**
+   * Build the prompt string to send to Claude.
+   * When `from` is provided, prefixes the content with `[from]: ` so Claude
+   * is aware of which participant is speaking in a multi-user session.
+   * The original `content` stored in message history is never modified.
+   */
+  static buildPrompt(content: string, from?: string): string {
+    return from ? `[${from}]: ${content}` : content;
+  }
+
+  async sendMessage(content: string, from?: string): Promise<string> {
+    // Add user message (store original content, from field tracks sender)
     this.messages.push({
       id: randomUUID(),
       role: 'user',
       content,
       timestamp: new Date(),
+      from,
     });
 
-    // Query Claude (backend will auto-restart process if needed)
-    const response = await this.backend.query(content);
+    // Query Claude with sender-prefixed prompt so Claude knows who is speaking
+    const response = await this.backend.query(ClaudeSession.buildPrompt(content, from));
 
     // Add assistant message
     this.messages.push({
@@ -179,22 +192,25 @@ export class ClaudeSession extends EventEmitter {
 
   // 流式发送消息 - 实时返回 chunks
   // content 可选：有值时发送消息，无值时只监听响应
-  async *sendMessageStream(content?: string): AsyncGenerator<StreamChunk> {
-    // Add user message if content provided
+  async *sendMessageStream(content?: string, from?: string): AsyncGenerator<StreamChunk> {
+    // Add user message if content provided (store original content)
     if (content !== undefined && content !== null) {
       this.messages.push({
         id: randomUUID(),
         role: 'user',
         content,
         timestamp: new Date(),
+        from,
       });
     }
 
     let fullResponse = '';
 
-    // Query Claude with stream (backend will auto-restart process if needed)
+    // Query Claude with sender-prefixed prompt
     try {
-      for await (const chunk of this.backend.queryStream(content)) {
+      for await (const chunk of this.backend.queryStream(
+        content !== undefined && content !== null ? ClaudeSession.buildPrompt(content, from) : content
+      )) {
         if (chunk.type === 'text' && chunk.content) {
           fullResponse += chunk.content;
         }

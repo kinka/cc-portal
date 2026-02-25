@@ -37,7 +37,7 @@ export class DatabaseManager {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
-        max_sessions INTEGER DEFAULT 5,
+        max_sessions INTEGER DEFAULT 200,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -52,13 +52,23 @@ export class DatabaseManager {
         FOREIGN KEY (owner_id) REFERENCES users(id)
       );
 
+      CREATE TABLE IF NOT EXISTS session_participants (
+        session_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        status TEXT DEFAULT 'pending',
+        invited_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        joined_at DATETIME,
+        PRIMARY KEY (session_id, user_id),
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+      );
+
       CREATE INDEX IF NOT EXISTS idx_sessions_owner ON sessions(owner_id);
       CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
     `);
   }
 
   // User operations
-  getOrCreateUser(userId: string, defaultMaxSessions: number = 5): User {
+  getOrCreateUser(userId: string, defaultMaxSessions: number = 200): User {
     // Try to get existing user
     const existing = this.db
       .query<{ id: string; max_sessions: number; created_at: string }, string>(
@@ -307,5 +317,73 @@ export class DatabaseManager {
 
   close() {
     this.db.close();
+  }
+
+  // Session participants operations
+  inviteParticipant(sessionId: string, userId: string): boolean {
+    try {
+      this.db
+        .query('INSERT INTO session_participants (session_id, user_id, status) VALUES (?, ?, ?)')
+        .run(sessionId, userId, 'pending');
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /** Directly add a user as a joined participant (no confirmation needed). */
+  addParticipant(sessionId: string, userId: string): boolean {
+    try {
+      this.db
+        .query(
+          'INSERT OR REPLACE INTO session_participants (session_id, user_id, status, joined_at) VALUES (?, ?, ?, ?)'
+        )
+        .run(sessionId, userId, 'joined', new Date().toISOString());
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  acceptInvitation(sessionId: string, userId: string): boolean {
+    const result = this.db
+      .query('UPDATE session_participants SET status = ?, joined_at = ? WHERE session_id = ? AND user_id = ?')
+      .run('joined', new Date().toISOString(), sessionId, userId);
+    return result.changes > 0;
+  }
+
+  getSessionParticipants(sessionId: string): Array<{ userId: string; status: string; joinedAt?: string }> {
+    const rows = this.db
+      .query<{ user_id: string; status: string; joined_at: string | null }, string>(
+        'SELECT user_id, status, joined_at FROM session_participants WHERE session_id = ?',
+      )
+      .all(sessionId);
+    return rows.map((r) => ({
+      userId: r.user_id,
+      status: r.status,
+      joinedAt: r.joined_at || undefined,
+    }));
+  }
+
+  getUserParticipatingSessions(userId: string): string[] {
+    const rows = this.db
+      .query<{ session_id: string }, string>(
+        "SELECT session_id FROM session_participants WHERE user_id = ? AND status = 'joined'",
+      )
+      .all(userId);
+    return rows.map((r) => r.session_id);
+  }
+
+  canAccessSession(sessionId: string, userId: string): boolean {
+    // Check if owner
+    const session = this.getSession(sessionId);
+    if (session?.ownerId === userId) return true;
+    // Check if participant
+    const participant = this.db
+      .query<{ status: string }, [string, string]>(
+        'SELECT status FROM session_participants WHERE session_id = ? AND user_id = ?',
+      )
+      .get(sessionId, userId);
+    return participant?.status === 'joined';
   }
 }

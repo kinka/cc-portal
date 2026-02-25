@@ -10,6 +10,8 @@ const log = createLogger({ module: 'SessionManager' });
 export interface CreateSessionOptions {
   ownerId: string;
   path?: string;
+  /** Project name to associate with this session */
+  project?: string;
   initialMessage?: string;
   model?: string;
   allowedTools?: string[];
@@ -90,16 +92,14 @@ export class ClaudeSessionManager {
     let targetPath: string;
 
     if (!path) {
+      // If no path provided, use the user directory as default
       targetPath = userDir;
     } else if (isAbsolute(path)) {
+      // If absolute path provided, use it directly (no restriction)
       targetPath = normalize(path);
     } else {
+      // If relative path provided, resolve it relative to user directory
       targetPath = normalize(resolve(userDir, path));
-    }
-
-    const normalizedUserDir = normalize(userDir);
-    if (!targetPath.startsWith(normalizedUserDir)) {
-      throw new Error(`Path "${path}" is outside of user directory`);
     }
 
     await mkdir(targetPath, { recursive: true });
@@ -165,13 +165,15 @@ export class ClaudeSessionManager {
   }
 
   async getSession(sessionId: string, userId: string): Promise<ClaudeSession | undefined> {
+    // Check if user can access this session (owner or participant)
+    if (!this.db.canAccessSession(sessionId, userId)) {
+      return undefined;
+    }
+
     const entry = this.sessions.get(sessionId);
 
     // If session exists and is valid, return it
     if (entry) {
-      if (entry.ownerId !== userId) {
-        return undefined;
-      }
       if (entry.session instanceof ClaudeSession) {
         return entry.session;
       }
@@ -187,19 +189,20 @@ export class ClaudeSessionManager {
     // Need to lazy load
     let loadPromise: Promise<ClaudeSession | undefined>;
 
+    const dbSession = this.db.getSession(sessionId);
+    if (!dbSession) {
+      return undefined;
+    }
+
     if (!entry) {
       // Load from database
-      const dbSession = this.db.getSession(sessionId);
-      if (!dbSession || dbSession.ownerId !== userId) {
-        return undefined;
-      }
       loadPromise = Promise.resolve(this.lazyLoadSession({ ...dbSession, status: 'active' }));
       this.db.updateSessionStatus(sessionId, 'active');
     } else {
       // Entry exists but session not loaded
       loadPromise = Promise.resolve(this.lazyLoadSession({
         id: entry.metadata.id,
-        ownerId: entry.ownerId,
+        ownerId: dbSession.ownerId,
         path: entry.metadata.path,
         model: entry.metadata.model,
         status: 'active',
@@ -214,6 +217,7 @@ export class ClaudeSessionManager {
 
     return loadPromise;
   }
+
 
   private async lazyLoadSession(metadata: {
     id: string;

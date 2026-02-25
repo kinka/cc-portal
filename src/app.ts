@@ -6,10 +6,20 @@ import type { PermissionResult } from './sdk-types';
 import { logger, isDev } from './logger';
 import { registerAuthMiddleware, requireUserContext } from './middleware/auth';
 import { registerAdminRoutes } from './admin-routes';
-
+import { SessionRegistry } from './crossSession/SessionRegistry';
+import { MessageRouter } from './crossSession/MessageRouter';
+import { UserDirectory } from './crossSession/UserDirectory';
+import { CrossUserNotifier } from './crossSession/CrossUserNotifier';
+import { SessionLinkManager } from './crossSession/SessionLinkManager';
+import { registerCrossSessionRoutes } from './routes/crossSessionRoutes';
+import { registerCrossUserRoutes } from './routes/crossUserRoutes';
+import { registerSessionLinkRoutes } from './routes/sessionLinkRoutes';
+import { registerParticipantRoutes } from './routes/participantRoutes';
 interface BuildAppOptions {
   sessionManager?: ClaudeSessionManager;
   db?: DatabaseManager;
+  /** Override for testing; prod creates its own instances */
+  registry?: SessionRegistry;
 }
 
 export function buildApp(options?: BuildAppOptions): FastifyInstance {
@@ -20,6 +30,12 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
   const manager = options.sessionManager;
   const db = options.db;
 
+  // Cross-session infrastructure (shared singletons for this app instance)
+  const registry = options.registry ?? new SessionRegistry();
+  const messageRouter = new MessageRouter(registry);
+  const userDirectory = new UserDirectory();
+  const crossUserNotifier = new CrossUserNotifier(userDirectory, registry);
+  const sessionLinkManager = new SessionLinkManager(registry, userDirectory);
   const fastify = Fastify({
     logger: {
       level: process.env.LOG_LEVEL || (isDev ? 'debug' : 'info'),
@@ -55,9 +71,19 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
   if (db) {
     registerAuthMiddleware(fastify, {
       db,
-      defaultMaxSessions: parseInt(process.env.DEFAULT_MAX_SESSIONS || '5', 10),
+      defaultMaxSessions: parseInt(process.env.DEFAULT_MAX_SESSIONS || '200', 10),
     });
     registerAdminRoutes(fastify, db);
+  }
+
+  // Register cross-session / cross-user / session-link routes
+  registerCrossSessionRoutes(fastify, messageRouter, registry);
+  registerCrossUserRoutes(fastify, userDirectory, crossUserNotifier);
+  registerSessionLinkRoutes(fastify, sessionLinkManager, registry, userDirectory);
+
+  // Register participant routes
+  if (db) {
+    registerParticipantRoutes(fastify, db);
   }
 
   fastify.get('/health', async () => {
@@ -96,6 +122,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
 
     const body = request.body as {
       path?: string;
+      project?: string;
       initialMessage?: string;
       model?: string;
       allowedTools?: string[];
@@ -125,6 +152,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
       const session = await manager.createSession({
         ownerId: userContext.userId,
         path: body.path,
+        project: body.project,
         initialMessage: body.initialMessage,
         model: body.model,
         allowedTools: body.allowedTools,
@@ -136,6 +164,11 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
         envVars: body.envVars,
         bypassPermission: body.bypassPermission,
       });
+
+      // Register in cross-session registry
+      registry.register(session.id, userContext.userId, body.project);
+      // Auto-touch user in directory
+      userDirectory.upsertProfile(userContext.userId);
 
       return {
         sessionId: session.id,
@@ -191,7 +224,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
 
     const userContext = requireUserContext(request);
     const { sessionId } = request.params as { sessionId: string };
-    const { message } = request.body as { message: string };
+    const { message, from } = request.body as { message: string; from?: string };
 
     const session = await manager.getSession(sessionId, userContext.userId);
     if (!session) {
@@ -200,7 +233,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
     }
 
     try {
-      const response = await session.sendMessage(message);
+      const response = await session.sendMessage(message, from || userContext.userId);
       return {
         sessionId,
         response,
@@ -237,7 +270,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
     });
 
     try {
-      const stream = session.sendMessageStream(message);
+      const stream = session.sendMessageStream(message, userContext.userId);
 
       for await (const chunk of stream) {
         reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
@@ -349,6 +382,10 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
       reply.status(404);
       return { error: 'Session not found or access denied' };
     }
+
+    // Unregister from cross-session infrastructure
+    registry.unregister(sessionId);
+    sessionLinkManager.disconnectAll(sessionId);
 
     return { sessionId, status: 'deleted' };
   });

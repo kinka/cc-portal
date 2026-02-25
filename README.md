@@ -13,6 +13,10 @@
 - 🔐 **HTTP 工具审批**：支持 HTTP/REST 审批流程（SSE 实时推送、pending-permissions 队列）
 - 📝 会话管理和历史记录
 - 🎯 完善的生命周期管理
+- 🔗 **跨 Session 通信**：同一用户的多个 Session 之间消息传递、广播
+- 👥 **跨用户通知**：用户间通知系统，支持权限控制
+- ⛓️ **会话链接**：实现数字分身 / Agent-to-Agent 实时对话
+- 👤 **用户目录**：用户 Profile 管理与搜索
 
 ## 架构
 
@@ -178,6 +182,351 @@ POST /sessions/:sessionId/stop
 DELETE /sessions/:sessionId
 ```
 
+## Demo
+
+### API Tester 可视化测试界面
+
+打开 `Demo/api-tester.html` 使用可视化界面测试所有跨 Session 通信 API：
+
+```bash
+open Demo/api-tester.html
+```
+
+功能：
+- 🔗 跨 Session 消息传递与广播
+- 👥 用户搜索与 Profile 管理
+- 🔔 跨用户通知系统
+- ⛓️ Session 链接创建与管理
+
+### 🎬 Auto Demo 自动演示
+
+打开 `Demo/auto-demo.html` 观看 user-a 和 user-b 之间的自动交互演示：
+
+```bash
+open Demo/auto-demo.html
+```
+
+**演示流程**：
+1. 🏗️ 创建 user-a 的 2 个 sessions
+2. 🏗️ 创建 user-b 的 1 个 session
+3. 👤 设置用户 Profile
+4. 💬 跨 Session 发送消息
+5. 📢 广播消息给所有 sessions
+6. 🔔 发送跨用户通知
+7. 🔗 创建 Session 链接邀请
+8. ✅ 接受链接邀请
+9. 💬 通过链接发送消息
+10. 📥 查看通知
+## 跨 Session 通信与数字分身
+
+### 概述
+
+本服务支持跨 Session 消息传递、跨用户通知、会话链接等功能，实现类似「数字分身」的 Agent-to-Agent (A2A) 通信。
+
+> ⚠️ **注意**：以下 API 需要认证，请使用 `X-User-ID` Header 或 `userId` Query 参数。
+
+---
+
+### 我的会话
+
+#### 获取当前用户的所有会话
+
+```bash
+GET /my-sessions
+# Header: X-User-ID: your-user-id
+
+# 返回
+{
+  "sessions": [
+    { "sessionId": "xxx", "userId": "your-user-id", "project": "project-a" },
+    { "sessionId": "yyy", "userId": "your-user-id", "project": "project-b" }
+  ]
+}
+```
+
+---
+
+### 跨 Session 消息
+
+#### 发送消息给另一个 Session
+
+```bash
+POST /sessions/:sessionId/send
+Header: X-User-ID: your-user-id
+Content-Type: application/json
+
+{
+  "targetSessionId": "target-session-id",
+  "type": "task",           # message | task | announcement
+  "content": "Hello!"
+}
+
+# 返回: { "messageId": "xxx" }
+```
+
+#### 广播消息给所有 Session
+
+```bash
+POST /sessions/:sessionId/broadcast
+Header: X-User-ID: your-user-id
+Content-Type: application/json
+
+{
+  "type": "announcement",
+  "content": "Broadcast to all!"
+}
+
+# 返回: { "messageIds": ["..."], "count": 2 }
+```
+
+#### 查看收件箱
+
+```bash
+GET /sessions/:sessionId/inbox
+Header: X-User-ID: your-user-id
+
+# Query: ?unread=1 只返回未读消息
+
+# 返回
+{
+  "messages": [
+    {
+      "id": "xxx",
+      "type": "task",
+      "content": "Hello!",
+      "fromSessionId": "yyy",
+      "readAt": null
+    }
+  ],
+  "unread": 1
+}
+```
+
+#### 标记消息为已读
+
+```bash
+POST /sessions/:sessionId/inbox/:messageId/read
+Header: X-User-ID: your-user-id
+
+# 返回: { "ok": true }
+```
+
+---
+
+### 用户目录与 Profile
+
+#### 搜索用户
+
+```bash
+GET /users?query=alice
+Header: X-User-ID: your-user-id
+
+# 返回
+{
+  "users": [
+    { "userId": "alice", "displayName": "Alice Smith", "skills": ["typescript"] }
+  ]
+}
+```
+
+#### 获取用户 Profile
+
+```bash
+GET /users/:userId/profile
+Header: X-User-ID: your-user-id
+
+# 返回
+{
+  "userId": "alice",
+  "displayName": "Alice Smith",
+  "skills": ["typescript", "rust"],
+  "currentProjects": ["cc-agents"]
+}
+```
+
+#### 更新自己的 Profile
+
+```bash
+PUT /me/profile
+Header: X-User-ID: your-user-id
+Content-Type: application/json
+
+{
+  "displayName": "Alice Smith",
+  "skills": ["typescript", "rust"],
+  "currentProjects": ["cc-agents"],
+  "messagePermission": "everyone"  # everyone | contacts | project_members | none
+}
+
+# 返回更新后的 Profile
+```
+
+---
+
+### 跨用户通知
+
+#### 发送通知给用户
+
+```bash
+POST /users/:userId/notify
+Header: X-User-ID: sender-user-id
+Content-Type: application/json
+
+{
+  "type": "alert",      # info | alert | warning | error
+  "content": "You have a new task!"
+}
+
+# 返回: { "notificationId": "xxx" }
+# 如果对方设置了 messagePermission: "none"，返回 403
+```
+
+#### 查看自己的通知
+
+```bash
+GET /me/notifications
+Header: X-User-ID: your-user-id
+
+# Query: ?unread=1 只返回未读
+
+# 返回
+{
+  "notifications": [
+    {
+      "id": "xxx",
+      "type": "alert",
+      "content": "You have a new task!",
+      "fromUserId": "bob",
+      "readAt": null
+    }
+  ],
+  "unread": 1
+}
+```
+
+#### 标记通知为已读
+
+```bash
+POST /me/notifications/:notificationId/read
+Header: X-User-ID: your-user-id
+
+# 返回: { "ok": true }
+```
+
+---
+
+### 会话链接（数字分身实时对话）
+
+#### 创建链接邀请
+
+```bash
+POST /sessions/:sessionId/links
+Header: X-User-ID: your-user-id
+Content-Type: application/json
+
+{
+  "targetUserId": "bob",
+  "mode": "bidirectional",  # bidirectional | readonly
+  "initialMessage": "Let's collaborate!"
+}
+
+# 返回
+{
+  "link": {
+    "id": "xxx",
+    "status": "pending"
+  }
+}
+```
+
+#### 查看会话的所有链接
+
+```bash
+GET /sessions/:sessionId/links
+Header: X-User-ID: your-user-id
+
+# Query: ?status=active|pending|all (default: all)
+
+# 返回
+{
+  "links": [
+    {
+      "id": "xxx",
+      "status": "active",
+      "targetUserId": "bob",
+      "mode": "bidirectional"
+    }
+  ]
+}
+```
+
+#### 查看收到的邀请
+
+```bash
+GET /me/links/invitations
+Header: X-User-ID: your-user-id
+
+# 返回
+{
+  "invitations": [
+    {
+      "id": "xxx",
+      "initiatorUserId": "alice",
+      "initiatorSessionId": "yyy",
+      "initialMessage": "Let's collaborate!"
+    }
+  ]
+}
+```
+
+#### 接受邀请
+
+```bash
+POST /me/links/invitations/:linkId/accept
+Header: X-User-ID: your-user-id
+Content-Type: application/json
+
+{
+  "sessionId": "your-session-id"
+}
+
+# 返回: { "ok": true }
+```
+
+#### 拒绝邀请
+
+```bash
+POST /me/links/invitations/:linkId/decline
+Header: X-User-ID: your-user-id
+
+# 返回: { "ok": true }
+```
+
+#### 通过链接发送消息
+
+```bash
+POST /sessions/:sessionId/links/:linkId/messages
+Header: X-User-ID: your-user-id
+Content-Type: application/json
+
+{
+  "content": "Hello through link! +bob check this"
+}
+
+# 支持 +bob 提及语法
+# 返回: { "ok": true, "mentions": ["bob"] }
+```
+
+#### 断开链接
+
+```bash
+DELETE /sessions/:sessionId/links/:linkId
+Header: X-User-ID: your-user-id
+
+# 返回: { "ok": true }
+```
+
+
 ## 示例
 
 ### 创建并对话
@@ -283,7 +632,20 @@ cc-agents/
 │   ├── ClaudeSession.ts         # 会话封装
 │   ├── ClaudeSessionManager.ts  # 会话管理器
 │   ├── AgentBackend.ts          # Agent 接口类型
-│   └── logger.ts                # 日志工具
+│   ├── logger.ts                # 日志工具
+│   ├── middleware/
+│   │   └── auth.ts               # 认证中间件
+│   ├── crossSession/
+│   │   ├── SessionRegistry.ts    # Session 注册表
+│   │   ├── MessageRouter.ts     # 消息路由
+│   │   ├── UserDirectory.ts     # 用户目录
+│   │   ├── CrossUserNotifier.ts # 跨用户通知
+│   │   └── SessionLinkManager.ts # 会话链接管理
+│   └── routes/
+│       ├── crossSessionRoutes.ts  # 跨Session消息API
+│       ├── crossUserRoutes.ts    # 跨用户通知API
+│       └── sessionLinkRoutes.ts  # 会话链接API
+
 ├── docs/
 │   └── ALIGNMENT.md             # 与 happy-cli 对齐改造成果记录
 ├── tests/
