@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Agent SSE 流式演示</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      text-align: center;
+      color: #94a3b8;
+      margin-bottom: 30px;
+    }
+    .panel {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid #334155;
+    }
+    .panel-title {
+      font-size: 14px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      background: #3b82f6;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    button:hover:not(:disabled) {
+      background: #2563eb;
+      transform: translateY(-1px);
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    button.secondary {
+      background: #475569;
+    }
+    button.secondary:hover:not(:disabled) {
+      background: #334155;
+    }
+    .input-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 12px;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-size: 14px;
+    }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+    .status.connected {
+      background: #064e3b;
+      color: #34d399;
+    }
+    .status.disconnected {
+      background: #7f1d1d;
+      color: #f87171;
+    }
+    .status.streaming {
+      background: #1e3a8a;
+      color: #60a5fa;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    .status.connected .status-dot {
+      background: #34d399;
+    }
+    .status.streaming .status-dot {
+      background: #60a5fa;
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .chat-container {
+      max-height: 500px;
+      overflow-y: auto;
+    }
+    .message {
+      padding: 15px;
+      margin-bottom: 10px;
+      border-radius: 8px;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .message.user {
+      background: #1e3a8a;
+      margin-left: 20%;
+    }
+    .message.assistant {
+      background: #1e293b;
+      border: 1px solid #334155;
+      margin-right: 20%;
+    }
+    .message-header {
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .message-content {
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .message-content.streaming {
+      border-right: 2px solid #60a5fa;
+      animation: cursor 1s infinite;
+    }
+    @keyframes cursor {
+      0%, 100% { border-color: transparent; }
+      50% { border-color: #60a5fa; }
+    }
+    .tool-call {
+      background: #374151;
+      padding: 10px;
+      border-radius: 6px;
+      margin: 10px 0;
+      font-size: 13px;
+    }
+    .tool-call-header {
+      color: #fbbf24;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+    .tool-call-content {
+      color: #9ca3af;
+      font-family: monospace;
+      font-size: 12px;
+      overflow-x: auto;
+    }
+    .log-entry {
+      padding: 8px;
+      margin-bottom: 5px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: monospace;
+    }
+    .log-entry.debug { background: #1e293b; color: #64748b; }
+    .log-entry.info { background: #1e3a8a; color: #60a5fa; }
+    .log-entry.warn { background: #451a03; color: #fbbf24; }
+    .log-entry.error { background: #7f1d1d; color: #f87171; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 15px;
+      margin-top: 15px;
+    }
+    .stat-card {
+      background: #0f172a;
+      padding: 15px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #3b82f6;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 5px;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #64748b;
+    }
+    .typing-indicator {
+      display: flex;
+      gap: 4px;
+      padding: 10px 0;
+    }
+    .typing-indicator span {
+      width: 8px;
+      height: 8px;
+      background: #60a5fa;
+      border-radius: 50%;
+      animation: bounce 1.4s infinite ease-in-out both;
+    }
+    .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+    .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🌊 Claude Agent SSE 流式演示</h1>
+    <p class="subtitle">实时观看 AI 思考过程，体验流式输出的魅力</p>
+
+    <!-- 控制面板 -->
+    <div class="panel">
+      <div class="panel-title">
+        <span>⚙️</span> 控制面板
+      </div>
+      <div class="controls">
+        <button id="btnCreate" onclick="createSession()">创建 Session</button>
+        <button id="btnDemo" onclick="runDemo()" disabled>运行演示对话</button>
+        <button id="btnClear" onclick="clearChat()" class="secondary">清空对话</button>
+        <button id="btnDelete" onclick="deleteSession()" class="secondary" disabled>删除 Session</button>
+      </div>
+      <div class="input-group">
+        <input type="text" id="messageInput" placeholder="输入消息..." disabled>
+        <button id="btnSend" onclick="sendMessage()" disabled>发送</button>
+      </div>
+      <div id="status" class="status disconnected">
+        <span class="status-dot"></span>
+        <span id="statusText">未连接</span>
+      </div>
+    </div>
+
+    <!-- 统计信息 -->
+    <div class="panel">
+      <div class="panel-title">
+        <span>📊</span> 实时统计
+      </div>
+      <div class="stats">
+        <div class="stat-card">
+          <div class="stat-value" id="statChunks">0</div>
+          <div class="stat-label">接收 Chunks</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statChars">0</div>
+          <div class="stat-label">字符数</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statTime">0s</div>
+          <div class="stat-label">响应时间</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statTools">0</div>
+          <div class="stat-label">工具调用</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 对话区域 -->
+    <div class="panel">
+      <div class="panel-title">
+        <span>💬</span> 对话记录
+      </div>
+      <div id="chatContainer" class="chat-container">
+        <div class="empty-state">
+          点击"创建 Session"开始体验 SSE 流式输出
+        </div>
+      </div>
+    </div>
+
+    <!-- 日志区域 -->
+    <div class="panel">
+      <div class="panel-title">
+        <span>📝</span> 事件日志
+      </div>
+      <div id="logContainer">
+        <div class="log-entry info">等待连接...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:3333';
+    let sessionId = null;
+    let eventSource = null;
+    let chunkCount = 0;
+    let charCount = 0;
+    let toolCount = 0;
+    let startTime = null;
+    let currentMessageEl = null;
+
+    function log(level, message) {
+      const container = document.getElementById('logContainer');
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${level}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      container.insertBefore(entry, container.firstChild);
+    }
+
+    function updateStatus(status, text) {
+      const statusEl = document.getElementById('status');
+      const textEl = document.getElementById('statusText');
+      statusEl.className = `status ${status}`;
+      textEl.textContent = text;
+    }
+
+    function updateStats() {
+      document.getElementById('statChunks').textContent = chunkCount;
+      document.getElementById('statChars').textContent = charCount;
+      document.getElementById('statTools').textContent = toolCount;
+      if (startTime) {
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        document.getElementById('statTime').textContent = elapsed + 's';
+      }
+    }
+
+    function addMessage(role, content, isStreaming = false) {
+      const container = document.getElementById('chatContainer');
+
+      // 移除 empty state
+      if (container.querySelector('.empty-state')) {
+        container.innerHTML = '';
+      }
+
+      const msg = document.createElement('div');
+      msg.className = `message ${role}`;
+
+      const header = document.createElement('div');
+      header.className = 'message-header';
+      header.textContent = role === 'user' ? '👤 用户' : '🤖 Claude';
+
+      const contentEl = document.createElement('div');
+      contentEl.className = 'message-content' + (isStreaming ? ' streaming' : '');
+      contentEl.textContent = content;
+
+      msg.appendChild(header);
+      msg.appendChild(contentEl);
+      container.appendChild(msg);
+      container.scrollTop = container.scrollHeight;
+
+      return contentEl;
+    }
+
+    function addToolCall(toolName, input) {
+      const container = document.getElementById('chatContainer');
+      const toolDiv = document.createElement('div');
+      toolDiv.className = 'tool-call';
+
+      const header = document.createElement('div');
+      header.className = 'tool-call-header';
+      header.textContent = `🔧 工具调用: ${toolName}`;
+
+      const content = document.createElement('div');
+      content.className = 'tool-call-content';
+      content.textContent = JSON.stringify(input, null, 2);
+
+      toolDiv.appendChild(header);
+      toolDiv.appendChild(content);
+      container.appendChild(toolDiv);
+      container.scrollTop = container.scrollHeight;
+
+      toolCount++;
+      updateStats();
+    }
+
+    async function createSession() {
+      try {
+        log('info', '创建 session...');
+        const response = await fetch(`${API_BASE}/sessions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path: '/tmp/stream-demo',
+            permissionMode: 'bypassPermissions'
+          })
+        });
+
+        const data = await response.json();
+        if (data.sessionId) {
+          sessionId = data.sessionId;
+          log('info', `Session 创建成功: ${sessionId.slice(0, 8)}...`);
+          updateStatus('connected', `已连接: ${sessionId.slice(0, 8)}...`);
+
+          document.getElementById('btnCreate').disabled = true;
+          document.getElementById('btnDemo').disabled = false;
+          document.getElementById('btnDelete').disabled = false;
+          document.getElementById('messageInput').disabled = false;
+          document.getElementById('btnSend').disabled = false;
+
+          document.getElementById('chatContainer').innerHTML = `
+            <div class="message assistant">
+              <div class="message-header">🤖 Claude</div>
+              <div class="message-content">你好！我是 Claude，一个 AI 助手。我已经准备好通过 SSE 流式输出与你对话了。试试发送一条消息吧！</div>
+            </div>
+          `;
+        } else {
+          log('error', '创建 session 失败: ' + JSON.stringify(data));
+        }
+      } catch (err) {
+        log('error', '创建 session 出错: ' + err.message);
+      }
+    }
+
+    function streamMessage(message) {
+      return new Promise((resolve, reject) => {
+        if (!sessionId) {
+          reject(new Error('没有活动的 session'));
+          return;
+        }
+
+        // 添加用户消息
+        addMessage('user', message);
+
+        // 创建助理消息占位（带打字动画）
+        currentMessageEl = addMessage('assistant', '', true);
+
+        // 添加打字指示器
+        const typingIndicator = document.createElement('div');
+        typingIndicator.className = 'typing-indicator';
+        typingIndicator.innerHTML = '<span></span><span></span><span></span>';
+        currentMessageEl.appendChild(typingIndicator);
+
+        // 重置统计
+        chunkCount = 0;
+        charCount = 0;
+        toolCount = 0;
+        startTime = Date.now();
+        updateStatus('streaming', '接收流式数据...');
+
+        const encodedMessage = encodeURIComponent(message);
+        eventSource = new EventSource(`${API_BASE}/sessions/${sessionId}/stream?message=${encodedMessage}`);
+
+        let fullContent = '';
+        let hasReceivedData = false;
+
+        eventSource.onmessage = (event) => {
+          if (event.data === '[DONE]') {
+            eventSource.close();
+            if (currentMessageEl) {
+              currentMessageEl.classList.remove('streaming');
+              // 移除打字指示器
+              const indicator = currentMessageEl.querySelector('.typing-indicator');
+              if (indicator) indicator.remove();
+            }
+            updateStatus('connected', `已连接: ${sessionId.slice(0, 8)}...`);
+            log('info', `流式输出完成，共 ${chunkCount} chunks，${charCount} 字符`);
+            resolve(fullContent);
+            return;
+          }
+
+          try {
+            const chunk = JSON.parse(event.data);
+            chunkCount++;
+            hasReceivedData = true;
+
+            if (chunk.type === 'text' && chunk.content) {
+              fullContent += chunk.content;
+              charCount += chunk.content.length;
+              if (currentMessageEl) {
+                // 移除打字指示器
+                const indicator = currentMessageEl.querySelector('.typing-indicator');
+                if (indicator) indicator.remove();
+                currentMessageEl.textContent = fullContent;
+              }
+            } else if (chunk.type === 'tool_start') {
+              addToolCall(chunk.toolName, chunk.toolInput);
+              log('info', `工具调用: ${chunk.toolName}`);
+            } else if (chunk.type === 'error') {
+              log('error', `错误: ${chunk.error}`);
+            } else if (chunk.type === 'system') {
+              log('debug', `系统: ${chunk.subtype}`);
+            } else if (chunk.type === 'log') {
+              log(chunk.level || 'debug', `日志: ${chunk.message}`);
+            }
+
+            updateStats();
+          } catch (err) {
+            log('error', '解析 chunk 失败: ' + err.message);
+          }
+        };
+
+        eventSource.onerror = (err) => {
+          eventSource.close();
+          if (!hasReceivedData) {
+            reject(new Error('SSE 连接失败'));
+          } else {
+            resolve(fullContent);
+          }
+        };
+
+        eventSource.onopen = () => {
+          log('info', 'SSE 连接已建立');
+        };
+      });
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('messageInput');
+      const message = input.value.trim();
+      if (!message) return;
+
+      input.value = '';
+      document.getElementById('btnSend').disabled = true;
+
+      try {
+        await streamMessage(message);
+      } catch (err) {
+        log('error', '发送消息失败: ' + err.message);
+        addMessage('assistant', '❌ 错误: ' + err.message);
+      } finally {
+        document.getElementById('btnSend').disabled = false;
+      }
+    }
+
+    async function runDemo() {
+      const demoMessages = [
+        '你好！请简单自我介绍',
+        '请用 Python 写一个快速排序算法',
+        '刚才的算法时间复杂度是多少？'
+      ];
+
+      document.getElementById('btnDemo').disabled = true;
+
+      for (const message of demoMessages) {
+        if (!sessionId) break;
+        await streamMessage(message);
+        await new Promise(r => setTimeout(r, 1000)); // 间隔1秒
+      }
+
+      document.getElementById('btnDemo').disabled = false;
+    }
+
+    function clearChat() {
+      document.getElementById('chatContainer').innerHTML = `
+        <div class="empty-state">
+          对话已清空
+        </div>
+      `;
+      log('info', '对话已清空');
+    }
+
+    async function deleteSession() {
+      if (!sessionId) return;
+
+      try {
+        await fetch(`${API_BASE}/sessions/${sessionId}`, { method: 'DELETE' });
+        log('info', 'Session 已删除');
+
+        sessionId = null;
+        updateStatus('disconnected', '未连接');
+
+        document.getElementById('btnCreate').disabled = false;
+        document.getElementById('btnDemo').disabled = true;
+        document.getElementById('btnDelete').disabled = true;
+        document.getElementById('messageInput').disabled = true;
+        document.getElementById('btnSend').disabled = true;
+
+        clearChat();
+      } catch (err) {
+        log('error', '删除 session 失败: ' + err.message);
+      }
+    }
+
+    // 回车发送
+    document.getElementById('messageInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+  </script>
+</body>
+</html>

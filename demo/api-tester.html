@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CC-Agents API Tester</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a24;
+      --bg-card: #16161f;
+      --border: #2a2a3a;
+      --border-active: #4a4a6a;
+      --text-primary: #e8e8ed;
+      --text-secondary: #8888a0;
+      --text-muted: #5555668;
+      --accent-cyan: #00d9ff;
+      --accent-cyan-dim: #00d9ff33;
+      --accent-magenta: #ff00aa;
+      --accent-magenta-dim: #ff00aa33;
+      --accent-green: #00ff88;
+      --accent-yellow: #ffdd00;
+      --accent-red: #ff4466;
+      --font-mono: 'JetBrains Mono', monospace;
+      --font-sans: 'Outfit', sans-serif;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* Scanline effect */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.1) 2px,
+        rgba(0, 0, 0, 0.1) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+      padding: 3rem 0;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+
+    header::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 200px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+    }
+
+    h1 {
+      font-size: 3rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+      font-family: var(--font-mono);
+    }
+
+    /* Config Section */
+    .config-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .config-section h2 {
+      font-size: 1rem;
+      color: var(--accent-cyan);
+      margin-bottom: 1rem;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .config-row {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-end;
+    }
+
+    .input-group {
+      flex: 1;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+      font-family: var(--font-mono);
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      transition: all 0.2s;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 3px var(--accent-cyan-dim);
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .tab {
+      padding: 0.75rem 1.5rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+
+    .tab:hover {
+      border-color: var(--border-active);
+      color: var(--text-primary);
+    }
+
+    .tab.active {
+      background: var(--accent-cyan-dim);
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+    }
+
+    /* API Sections */
+    .api-section {
+      display: none;
+    }
+
+    .api-section.active {
+      display: block;
+    }
+
+    .api-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      transition: all 0.3s;
+    }
+
+    .api-card:hover {
+      border-color: var(--border-active);
+    }
+
+    .api-card-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .method {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.35rem 0.75rem;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    .method.get { background: var(--accent-green); color: #000; }
+    .method.post { background: var(--accent-cyan); color: #000; }
+    .method.put { background: var(--accent-yellow); color: #000; }
+    .method.delete { background: var(--accent-red); color: #fff; }
+
+    .endpoint {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      color: var(--text-primary);
+    }
+
+    .api-card-body {
+      margin-bottom: 1rem;
+    }
+
+    .api-card-body label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+      font-family: var(--font-mono);
+    }
+
+    .api-card-body textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--accent-cyan);
+      color: #000;
+    }
+
+    .btn-primary:hover {
+      background: #33e1ff;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px var(--accent-cyan-dim);
+    }
+
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent-cyan);
+    }
+
+    /* Response */
+    .response {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-top: 1rem;
+      display: none;
+    }
+
+    .response.show {
+      display: block;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .response-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .status {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .status.success { color: var(--accent-green); }
+    .status.error { color: var(--accent-red); }
+    .status.pending { color: var(--accent-yellow); }
+
+    .response-time {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    pre {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    /* Status indicators */
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 0.5rem;
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.online { background: var(--accent-green); }
+    .status-dot.offline { background: var(--accent-red); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      border-top: 1px solid var(--border);
+      margin-top: 3rem;
+    }
+
+    /* Session List */
+    .session-list {
+      margin-top: 1rem;
+    }
+
+    .session-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem;
+      background: var(--bg-secondary);
+      border-radius: 6px;
+      margin-bottom: 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+    }
+
+    .session-item .id {
+      color: var(--accent-cyan);
+    }
+
+    .session-item .project {
+      color: var(--text-muted);
+    }
+
+    /* Notification badge */
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      margin-left: 0.5rem;
+    }
+
+    .badge.info { background: var(--accent-cyan-dim); color: var(--accent-cyan); }
+    .badge.alert { background: var(--accent-magenta-dim); color: var(--accent-magenta); }
+    .badge.warning { background: rgba(255, 221, 0, 0.2); color: var(--accent-yellow); }
+    .badge.error { background: rgba(255, 68, 102, 0.2); color: var(--accent-red); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>CC-Agents API Tester</h1>
+      <p class="subtitle">// Cross-Session Communication & Digital Avatar</p>
+    </header>
+
+    <!-- Config -->
+    <div class="config-section">
+      <h2><span class="status-dot online"></span>Configuration</h2>
+      <div class="config-row">
+        <div class="input-group">
+          <label>Server URL</label>
+          <input type="text" id="serverUrl" value="http://localhost:3333" placeholder="http://localhost:3333">
+        </div>
+        <div class="input-group">
+          <label>Current User ID</label>
+          <input type="text" id="userId" value="test-user" placeholder="your-user-id">
+        </div>
+        <button class="btn btn-secondary" onclick="createTestSessions()">Create Test Sessions</button>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('sessions')">My Sessions</button>
+      <button class="tab" onclick="switchTab('messages')">Messages</button>
+      <button class="tab" onclick="switchTab('users')">Users</button>
+      <button class="tab" onclick="switchTab('notifications')">Notifications</button>
+      <button class="tab" onclick="switchTab('links')">Session Links</button>
+    </div>
+
+    <!-- My Sessions Section -->
+    <div id="section-sessions" class="api-section active">
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method get">GET</span>
+          <span class="endpoint">/my-sessions</span>
+        </div>
+        <div class="api-card-body">
+          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Get all active sessions for the current user</p>
+        </div>
+        <button class="btn btn-primary" onclick="fetchMySessions()">Execute</button>
+        <div id="response-my-sessions" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+
+      <!-- Create Session -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method post">POST</span>
+          <span class="endpoint">/sessions</span>
+        </div>
+        <div class="api-card-body">
+          <label>Body (JSON)</label>
+          <textarea id="create-session-body">{
+  "project": "test-project"
+}</textarea>
+        </div>
+        <button class="btn btn-primary" onclick="createSession()">Execute</button>
+        <div id="response-create-session" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Messages Section -->
+    <div id="section-messages" class="api-section">
+      <!-- Send Message -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method post">POST</span>
+          <span class="endpoint">/sessions/:sessionId/send</span>
+        </div>
+        <div class="api-card-body">
+          <label>Target Session ID</label>
+          <input type="text" id="send-target-session" placeholder="target-session-id">
+          <label style="margin-top: 0.75rem;">Body (JSON)</label>
+          <textarea id="send-body">{
+  "type": "task",
+  "content": "Hello from API Tester!"
+}</textarea>
+        </div>
+        <button class="btn btn-primary" onclick="sendMessage()">Execute</button>
+        <div id="response-send" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+
+      <!-- Broadcast -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method post">POST</span>
+          <span class="endpoint">/sessions/:sessionId/broadcast</span>
+        </div>
+        <div class="api-card-body">
+          <label>Body (JSON)</label>
+          <textarea id="broadcast-body">{
+  "type": "announcement",
+  "content": "Broadcast to all my sessions!"
+}</textarea>
+        </div>
+        <button class="btn btn-primary" onclick="broadcastMessage()">Execute</button>
+        <div id="response-broadcast" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+
+      <!-- Get Inbox -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method get">GET</span>
+          <span class="endpoint">/sessions/:sessionId/inbox</span>
+        </div>
+        <div class="api-card-body">
+          <label>Session ID</label>
+          <input type="text" id="inbox-session" placeholder="session-id">
+          <label style="margin-top: 0.75rem;">Query</label>
+          <select id="inbox-filter">
+            <option value="">All messages</option>
+            <option value="1">Unread only</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="getInbox()">Execute</button>
+        <div id="response-inbox" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+
+      <!-- Mark as Read -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method post">POST</span>
+          <span class="endpoint">/sessions/:sessionId/inbox/:messageId/read</span>
+        </div>
+        <div class="api-card-body">
+          <label>Session ID</label>
+          <input type="text" id="read-session" placeholder="session-id">
+          <label style="margin-top: 0.75rem;">Message ID</label>
+          <input type="text" id="read-message" placeholder="message-id">
+        </div>
+        <button class="btn btn-primary" onclick="markAsRead()">Execute</button>
+        <div id="response-read" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Users Section -->
+    <div id="section-users" class="api-section">
+      <!-- Search Users -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method get">GET</span>
+          <span class="endpoint">/users?query=xxx</span>
+        </div>
+        <div class="api-card-body">
+          <label>Search Query</label>
+          <input type="text" id="search-query" placeholder="username or display name">
+        </div>
+        <button class="btn btn-primary" onclick="searchUsers()">Execute</button>
+        <div id="response-search" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+
+      <!-- Get Profile -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method get">GET</span>
+          <span class="endpoint">/users/:userId/profile</span>
+        </div>
+        <div class="api-card-body">
+          <label>User ID</label>
+          <input type="text" id="profile-user" placeholder="user-id">
+        </div>
+        <button class="btn btn-primary" onclick="getProfile()">Execute</button>
+        <div id="response-profile" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+
+      <!-- Update Profile -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method put">PUT</span>
+          <span class="endpoint">/me/profile</span>
+        </div>
+        <div class="api-card-body">
+          <label>Body (JSON)</label>
+          <textarea id="profile-body">{
+  "displayName": "Test User",
+  "skills": ["typescript", "python"],
+  "currentProjects": ["cc-agents"],
+  "messagePermission": "everyone"
+}</textarea>
+        </div>
+        <button class="btn btn-primary" onclick="updateProfile()">Execute</button>
+        <div id="response-update-profile" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notifications Section -->
+    <div id="section-notifications" class="api-section">
+      <!-- Send Notification -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method post">POST</span>
+          <span class="endpoint">/users/:userId/notify</span>
+        </div>
+        <div class="api-card-body">
+          <label>Target User ID</label>
+          <input type="text" id="notify-target" placeholder="user-id">
+          <label style="margin-top: 0.75rem;">Body (JSON)</label>
+          <textarea id="notify-body">{
+  "type": "alert",
+  "content": "You have a new notification!"
+}</textarea>
+        </div>
+        <button class="btn btn-primary" onclick="sendNotification()">Execute</button>
+        <div id="response-notify" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+
+      <!-- Get Notifications -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method get">GET</span>
+          <span class="endpoint">/me/notifications</span>
+        </div>
+        <div class="api-card-body">
+          <label>Filter</label>
+          <select id="notifications-filter">
+            <option value="">All</option>
+            <option value="1">Unread only</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="getNotifications()">Execute</button>
+        <div id="response-notifications" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+
+      <!-- Mark Notification Read -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method post">POST</span>
+          <span class="endpoint">/me/notifications/:notificationId/read</span>
+        </div>
+        <div class="api-card-body">
+          <label>Notification ID</label>
+          <input type="text" id="notification-read-id" placeholder="notification-id">
+        </div>
+        <button class="btn btn-primary" onclick="markNotificationRead()">Execute</button>
+        <div id="response-notification-read" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Session Links Section -->
+    <div id="section-links" class="api-section">
+      <!-- Create Link -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method post">POST</span>
+          <span class="endpoint">/sessions/:sessionId/links</span>
+        </div>
+        <div class="api-card-body">
+          <label>Target User ID</label>
+          <input type="text" id="link-target" placeholder="user-id">
+          <label style="margin-top: 0.75rem;">Body (JSON)</label>
+          <textarea id="link-body">{
+  "mode": "bidirectional",
+  "initialMessage": "Let's collaborate!"
+}</textarea>
+        </div>
+        <button class="btn btn-primary" onclick="createLink()">Execute</button>
+        <div id="response-link" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+
+      <!-- Get Links -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method get">GET</span>
+          <span class="endpoint">/sessions/:sessionId/links</span>
+        </div>
+        <div class="api-card-body">
+          <label>Session ID</label>
+          <input type="text" id="links-session" placeholder="session-id">
+          <label style="margin-top: 0.75rem;">Status Filter</label>
+          <select id="links-status">
+            <option value="all">All</option>
+            <option value="active">Active</option>
+            <option value="pending">Pending</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="getLinks()">Execute</button>
+        <div id="response-links" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+
+      <!-- Get Invitations -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method get">GET</span>
+          <span class="endpoint">/me/links/invitations</span>
+        </div>
+        <button class="btn btn-primary" onclick="getInvitations()">Execute</button>
+        <div id="response-invitations" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+
+      <!-- Accept Invitation -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method post">POST</span>
+          <span class="endpoint">/me/links/invitations/:linkId/accept</span>
+        </div>
+        <div class="api-card-body">
+          <label>Link ID</label>
+          <input type="text" id="accept-link-id" placeholder="link-id">
+          <label style="margin-top: 0.75rem;">Your Session ID</label>
+          <input type="text" id="accept-session-id" placeholder="session-id">
+        </div>
+        <button class="btn btn-primary" onclick="acceptInvitation()">Execute</button>
+        <div id="response-accept" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+
+      <!-- Send Link Message -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method post">POST</span>
+          <span class="endpoint">/sessions/:sessionId/links/:linkId/messages</span>
+        </div>
+        <div class="api-card-body">
+          <label>Link ID</label>
+          <input type="text" id="link-msg-link-id" placeholder="link-id">
+          <label style="margin-top: 0.75rem;">Content</label>
+          <textarea id="link-msg-content">Hello through link! +user check this</textarea>
+        </div>
+        <button class="btn btn-primary" onclick="sendLinkMessage()">Execute</button>
+        <div id="response-link-msg" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+
+      <!-- Disconnect Link -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method delete">DELETE</span>
+          <span class="endpoint">/sessions/:sessionId/links/:linkId</span>
+        </div>
+        <div class="api-card-body">
+          <label>Link ID</label>
+          <input type="text" id="disconnect-link-id" placeholder="link-id">
+        </div>
+        <button class="btn btn-primary" onclick="disconnectLink()">Execute</button>
+        <div id="response-disconnect" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>CC-Agents API Tester — Powered by Claude</p>
+    </footer>
+  </div>
+
+  <script>
+    // State
+    let mySessions = [];
+    let currentSessionId = null;
+
+    // Utils
+    function getConfig() {
+      return {
+        baseUrl: document.getElementById('serverUrl').value.trim(),
+        userId: document.getElementById('userId').value.trim() || 'test-user'
+      };
+    }
+
+    async function apiRequest(method, path, body = null, userId = null) {
+      const { baseUrl, userId: defaultUserId } = getConfig();
+      const uid = userId || defaultUserId;
+      const url = `${baseUrl}${path}`;
+      const headers = {
+        'Content-Type': 'application/json',
+        'X-User-ID': uid
+      };
+
+      const startTime = performance.now();
+      try {
+        const response = await fetch(url, {
+          method,
+          headers,
+          body: body ? JSON.stringify(body) : null
+        });
+        const endTime = performance.now();
+        const data = await response.json();
+        
+        return {
+          ok: response.ok,
+          status: response.status,
+          data,
+          time: (endTime - startTime).toFixed(0)
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          status: 0,
+          data: { error: error.message },
+          time: (performance.now() - startTime).toFixed(0)
+        };
+      }
+    }
+
+    function showResponse(responseId, result) {
+      const el = document.getElementById(responseId);
+      const statusEl = el.querySelector('.status');
+      const timeEl = el.querySelector('pre');
+      
+      statusEl.textContent = result.status || 'Error';
+      statusEl.className = 'status ' + (result.ok ? 'success' : 'error');
+      timeEl.textContent = result.time + 'ms\n\n' + JSON.stringify(result.data, null, 2);
+      el.classList.add('show');
+    }
+
+    // Tab switching
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.api-section').forEach(s => s.classList.remove('active'));
+      
+      document.querySelector(`.tab[onclick="switchTab('${tab}')"]`).classList.add('active');
+      document.getElementById(`section-${tab}`).classList.add('active');
+    }
+
+    // My Sessions
+    async function fetchMySessions() {
+      const { userId } = getConfig();
+      const result = await apiRequest('GET', '/my-sessions', null, userId);
+      
+      if (result.ok && result.data.sessions) {
+        mySessions = result.data.sessions;
+        if (mySessions.length > 0 && !currentSessionId) {
+          currentSessionId = mySessions[0].sessionId;
+          // Auto-fill other inputs
+          document.getElementById('send-target-session').value = mySessions[1]?.sessionId || '';
+          document.getElementById('inbox-session').value = currentSessionId;
+          document.getElementById('read-session').value = currentSessionId;
+          document.getElementById('links-session').value = currentSessionId;
+        }
+      }
+      
+      showResponse('response-my-sessions', result);
+    }
+
+    async function createSession() {
+      const { userId } = getConfig();
+      let body;
+      try {
+        body = JSON.parse(document.getElementById('create-session-body').value);
+      } catch (e) {
+        body = {};
+      }
+      
+      const result = await apiRequest('POST', '/sessions', body, userId);
+      
+      if (result.ok) {
+        mySessions.push({ sessionId: result.data.sessionId, ...body });
+        currentSessionId = result.data.sessionId;
+      }
+      
+      showResponse('response-create-session', result);
+    }
+
+    async function createTestSessions() {
+      const { userId } = getConfig();
+      
+      // Create first session
+      let result = await apiRequest('POST', '/sessions', { project: 'test-1' }, userId);
+      if (!result.ok) {
+        alert('Failed to create session: ' + JSON.stringify(result.data));
+        return;
+      }
+      
+      const session1 = result.data.sessionId;
+      
+      // Create second session
+      result = await apiRequest('POST', '/sessions', { project: 'test-2' }, userId);
+      if (!result.ok) {
+        alert('Failed to create second session');
+        return;
+      }
+      
+      const session2 = result.data.sessionId;
+      
+      // Auto-fill
+      document.getElementById('send-target-session').value = session2;
+      document.getElementById('inbox-session').value = session1;
+      document.getElementById('read-session').value = session1;
+      document.getElementById('broadcast-body').value = `{\n  "type": "announcement",\n  "content": "Broadcast from ${session1} to all!"\n}`;
+      
+      currentSessionId = session1;
+      alert(`Created 2 sessions:\n1. ${session1}\n2. ${session2}`);
+      
+      // Refresh list
+      fetchMySessions();
+    }
+
+    // Messages
+    async function sendMessage() {
+      const { userId } = getConfig();
+      const sessionId = currentSessionId || document.getElementById('send-target-session').value;
+      const targetSession = document.getElementById('send-target-session').value;
+      let body;
+      try {
+        body = JSON.parse(document.getElementById('send-body').value);
+      } catch (e) {
+        body = { type: 'message', content: 'Hello!' };
+      }
+      
+      const result = await apiRequest('POST', `/sessions/${sessionId}/send`, {
+        targetSessionId: targetSession,
+        ...body
+      }, userId);
+      
+      showResponse('response-send', result);
+    }
+
+    async function broadcastMessage() {
+      const { userId } = getConfig();
+      const sessionId = currentSessionId || document.getElementById('inbox-session').value;
+      let body;
+      try {
+        body = JSON.parse(document.getElementById('broadcast-body').value);
+      } catch (e) {
+        body = { type: 'announcement', content: 'Broadcast!' };
+      }
+      
+      const result = await apiRequest('POST', `/sessions/${sessionId}/broadcast`, body, userId);
+      showResponse('response-broadcast', result);
+    }
+
+    async function getInbox() {
+      const { userId } = getConfig();
+      const sessionId = document.getElementById('inbox-session').value || currentSessionId;
+      const filter = document.getElementById('inbox-filter').value;
+      const query = filter ? `?unread=${filter}` : '';
+      
+      const result = await apiRequest('GET', `/sessions/${sessionId}/inbox${query}`, null, userId);
+      showResponse('response-inbox', result);
+    }
+
+    async function markAsRead() {
+      const { userId } = getConfig();
+      const sessionId = document.getElementById('read-session').value || currentSessionId;
+      const messageId = document.getElementById('read-message').value;
+      
+      const result = await apiRequest('POST', `/sessions/${sessionId}/inbox/${messageId}/read`, {}, userId);
+      showResponse('response-read', result);
+    }
+
+    // Users
+    async function searchUsers() {
+      const { userId } = getConfig();
+      const query = document.getElementById('search-query').value;
+      
+      const result = await apiRequest('GET', `/users?query=${encodeURIComponent(query)}`, null, userId);
+      showResponse('response-search', result);
+    }
+
+    async function getProfile() {
+      const { userId } = getConfig();
+      const targetUser = document.getElementById('profile-user').value;
+      
+      const result = await apiRequest('GET', `/users/${targetUser}/profile`, null, userId);
+      showResponse('response-profile', result);
+    }
+
+    async function updateProfile() {
+      const { userId } = getConfig();
+      let body;
+      try {
+        body = JSON.parse(document.getElementById('profile-body').value);
+      } catch (e) {
+        body = {};
+      }
+      
+      const result = await apiRequest('PUT', '/me/profile', body, userId);
+      showResponse('response-update-profile', result);
+    }
+
+    // Notifications
+    async function sendNotification() {
+      const { userId } = getConfig();
+      const targetUser = document.getElementById('notify-target').value;
+      let body;
+      try {
+        body = JSON.parse(document.getElementById('notify-body').value);
+      } catch (e) {
+        body = { type: 'alert', content: 'Hello!' };
+      }
+      
+      const result = await apiRequest('POST', `/users/${targetUser}/notify`, body, userId);
+      showResponse('response-notify', result);
+    }
+
+    async function getNotifications() {
+      const { userId } = getConfig();
+      const filter = document.getElementById('notifications-filter').value;
+      const query = filter ? `?unread=${filter}` : '';
+      
+      const result = await apiRequest('GET', `/me/notifications${query}`, null, userId);
+      showResponse('response-notifications', result);
+    }
+
+    async function markNotificationRead() {
+      const { userId } = getConfig();
+      const notifId = document.getElementById('notification-read-id').value;
+      
+      const result = await apiRequest('POST', `/me/notifications/${notifId}/read`, {}, userId);
+      showResponse('response-notification-read', result);
+    }
+
+    // Session Links
+    async function createLink() {
+      const { userId } = getConfig();
+      const sessionId = currentSessionId || document.getElementById('links-session').value;
+      const targetUser = document.getElementById('link-target').value;
+      let body;
+      try {
+        body = JSON.parse(document.getElementById('link-body').value);
+      } catch (e) {
+        body = { mode: 'bidirectional' };
+      }
+      
+      const result = await apiRequest('POST', `/sessions/${sessionId}/links`, {
+        targetUserId: targetUser,
+        ...body
+      }, userId);
+      
+      if (result.ok && result.data.link) {
+        document.getElementById('accept-link-id').value = result.data.link.id;
+        document.getElementById('link-msg-link-id').value = result.data.link.id;
+        document.getElementById('disconnect-link-id').value = result.data.link.id;
+      }
+      
+      showResponse('response-link', result);
+    }
+
+    async function getLinks() {
+      const { userId } = getConfig();
+      const sessionId = currentSessionId || document.getElementById('links-session').value;
+      const status = document.getElementById('links-status').value;
+      
+      const result = await apiRequest('GET', `/sessions/${sessionId}/links?status=${status}`, null, userId);
+      showResponse('response-links', result);
+    }
+
+    async function getInvitations() {
+      const { userId } = getConfig();
+      const result = await apiRequest('GET', '/me/links/invitations', null, userId);
+      showResponse('response-invitations', result);
+    }
+
+    async function acceptInvitation() {
+      const { userId } = getConfig();
+      const linkId = document.getElementById('accept-link-id').value;
+      const sessionId = document.getElementById('accept-session-id').value || currentSessionId;
+      
+      const result = await apiRequest('POST', `/me/links/invitations/${linkId}/accept`, { sessionId }, userId);
+      showResponse('response-accept', result);
+    }
+
+    async function sendLinkMessage() {
+      const { userId } = getConfig();
+      const sessionId = currentSessionId || document.getElementById('links-session').value;
+      const linkId = document.getElementById('link-msg-link-id').value;
+      const content = document.getElementById('link-msg-content').value;
+      
+      const result = await apiRequest('POST', `/sessions/${sessionId}/links/${linkId}/messages`, { content }, userId);
+      showResponse('response-link-msg', result);
+    }
+
+    async function disconnectLink() {
+      const { userId } = getConfig();
+      const sessionId = currentSessionId || document.getElementById('links-session').value;
+      const linkId = document.getElementById('disconnect-link-id').value;
+      
+      const result = await apiRequest('DELETE', `/sessions/${sessionId}/links/${linkId}`, null, userId);
+      showResponse('response-disconnect', result);
+    }
+  </script>
+</body>
+</html>

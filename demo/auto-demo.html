@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CC-Agents Auto Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a24;
+      --bg-card: #16161f;
+      --border: #2a2a3a;
+      --border-active: #4a4a6a;
+      --text-primary: #e8e8ed;
+      --text-secondary: #8888a0;
+      --text-muted: #5555668;
+      --accent-cyan: #00d9ff;
+      --accent-cyan-dim: #00d9ff33;
+      --accent-magenta: #ff00aa;
+      --accent-magenta-dim: #ff00aa33;
+      --accent-green: #00ff88;
+      --accent-yellow: #ffdd00;
+      --accent-red: #ff4466;
+      --user-a-color: #00d9ff;
+      --user-b-color: #ff00aa;
+      --font-mono: 'JetBrains Mono', monospace;
+      --font-sans: 'Outfit', sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px);
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+      padding: 2rem 0;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+
+    header::after {
+      content: '';
+      position: absolute;
+      bottom: -1px; left: 50%;
+      transform: translateX(-50%);
+      width: 200px; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent-cyan), var(--accent-magenta), transparent);
+    }
+
+    h1 {
+      font-size: 2.5rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+
+    .subtitle { color: var(--text-secondary); font-size: 1rem; font-family: var(--font-mono); }
+
+    .config-bar {
+      display: flex; gap: 1rem; align-items: center; justify-content: center;
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; margin-bottom: 2rem;
+    }
+
+    .config-bar input {
+      padding: 0.5rem 1rem; background: var(--bg-secondary); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text-primary); font-family: var(--font-mono); font-size: 0.85rem;
+    }
+
+    .btn {
+      padding: 0.5rem 1.5rem; border: none; border-radius: 6px;
+      font-family: var(--font-mono); font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+
+    .btn-primary { background: var(--accent-cyan); color: #000; }
+    .btn-primary:hover { background: #33e1ff; transform: translateY(-2px); box-shadow: 0 4px 20px var(--accent-cyan-dim); }
+    .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); }
+
+    .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+
+    .user-panel {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+      padding: 1.5rem; position: relative; overflow: hidden;
+    }
+
+    .user-panel.user-a { border-color: var(--accent-cyan-dim); }
+    .user-panel.user-a::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--accent-cyan), transparent);
+    }
+
+    .user-panel.user-b { border-color: var(--accent-magenta-dim); }
+    .user-panel.user-b::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--accent-magenta), transparent);
+    }
+
+    .user-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+
+    .user-avatar {
+      width: 48px; height: 48px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; font-weight: 700;
+    }
+
+    .user-a .user-avatar { background: var(--accent-cyan-dim); color: var(--accent-cyan); }
+    .user-b .user-avatar { background: var(--accent-magenta-dim); color: var(--accent-magenta); }
+
+    .user-info h2 { font-size: 1.25rem; margin-bottom: 0.25rem; }
+    .user-a .user-info h2 { color: var(--accent-cyan); }
+    .user-b .user-info h2 { color: var(--accent-magenta); }
+    .user-status { font-size: 0.8rem; color: var(--text-secondary); font-family: var(--font-mono); }
+
+    .sessions-list { margin-top: 1rem; }
+    .session-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.75rem; background: var(--bg-secondary); border-radius: 6px;
+      margin-bottom: 0.5rem; font-family: var(--font-mono); font-size: 0.8rem; transition: all 0.2s;
+    }
+    .session-item.active { border: 1px solid var(--accent-cyan); }
+    .session-item .id { color: var(--accent-cyan); }
+    .session-item .project { color: var(--text-muted); }
+
+    .timeline-panel {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;
+    }
+
+    .timeline-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .timeline-header h3 { font-size: 1rem; color: var(--text-secondary); font-family: var(--font-mono); }
+
+    .timeline { position: relative; padding-left: 2rem; }
+    .timeline::before {
+      content: ''; position: absolute; left: 0.5rem; top: 0; bottom: 0;
+      width: 2px; background: var(--border);
+    }
+
+    .timeline-item {
+      position: relative; padding: 1rem; background: var(--bg-secondary); border-radius: 8px;
+      margin-bottom: 1rem; opacity: 0; transform: translateY(10px); animation: slideIn 0.3s ease forwards;
+    }
+
+    @keyframes slideIn { to { opacity: 1; transform: translateY(0); } }
+
+    .timeline-item::before {
+      content: ''; position: absolute; left: -1.5rem; top: 1rem;
+      width: 12px; height: 12px; border-radius: 50%; background: var(--accent-cyan);
+    }
+    .timeline-item.user-b::before { background: var(--accent-magenta); }
+    .timeline-item .time { font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-bottom: 0.5rem; }
+    .timeline-item .content { font-size: 0.9rem; color: var(--text-primary); }
+    .timeline-item .type {
+      display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem;
+      font-family: var(--font-mono); margin-right: 0.5rem;
+      background: var(--accent-cyan-dim); color: var(--accent-cyan);
+    }
+    .timeline-item.user-b .type { background: var(--accent-magenta-dim); color: var(--accent-magenta); }
+
+    .notifications-panel {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem;
+    }
+
+    .notification-item {
+      display: flex; align-items: flex-start; gap: 1rem;
+      padding: 1rem; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 0.75rem;
+    }
+    .notification-icon { font-size: 1.25rem; }
+    .notification-content { flex: 1; }
+    .notification-content .title { font-size: 0.9rem; margin-bottom: 0.25rem; }
+    .notification-content .desc { font-size: 0.8rem; color: var(--text-secondary); }
+
+    .log-panel {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;
+    }
+
+    .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .log-header h3 { font-size: 1rem; color: var(--text-secondary); font-family: var(--font-mono); }
+
+    .log-console {
+      background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px;
+      padding: 1rem; height: 200px; overflow-y: auto; font-family: var(--font-mono); font-size: 0.8rem;
+    }
+
+    .log-entry { margin-bottom: 0.5rem; display: flex; gap: 0.75rem; }
+    .log-entry .timestamp { color: var(--text-muted); }
+    .log-entry .message { color: var(--text-secondary); }
+    .log-entry.success .message { color: var(--accent-green); }
+    .log-entry.error .message { color: var(--accent-red); }
+    .log-entry.info .message { color: var(--accent-cyan); }
+
+    .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+
+    .stat-card {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+      padding: 1rem; text-align: center;
+    }
+
+    .stat-value {
+      font-size: 2rem; font-weight: 700; margin-bottom: 0.25rem;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .stat-label { font-size: 0.8rem; color: var(--text-secondary); font-family: var(--font-mono); }
+
+    .controls { display: flex; gap: 1rem; justify-content: center; margin-bottom: 1.5rem; }
+    .btn-large { padding: 0.75rem 2rem; font-size: 1rem; }
+    .btn-running { background: var(--accent-green); color: #000; }
+    .btn-stopped { background: var(--accent-red); color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🤖 CC-Agents Auto Demo</h1>
+      <p class="subtitle">// Agent-to-Agent Cross-Session Communication</p>
+    </header>
+
+    <div class="config-bar">
+      <label>Server URL:</label>
+      <input type="text" id="serverUrl" value="http://localhost:3333" style="width: 200px;">
+      <button type="button" class="btn btn-secondary" onclick="event.preventDefault(); event.stopPropagation(); resetAll();">🔄 Reset</button>
+      <button type="button" class="btn btn-secondary" onclick="event.preventDefault(); event.stopPropagation(); clearLogs();">🗑️ Clear Logs</button>
+    </div>
+
+    <div class="controls">
+      <button type="button" class="btn btn-primary btn-large" id="startBtn" onclick="event.preventDefault(); event.stopPropagation(); toggleDemo();">▶️ Start Demo</button>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-sessions">0</div>
+        <div class="stat-label">Sessions Created</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-messages">0</div>
+        <div class="stat-label">Messages Sent</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-notifications">0</div>
+        <div class="stat-label">Notifications</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-links">0</div>
+        <div class="stat-label">Links Active</div>
+      </div>
+    </div>
+
+    <div class="main-grid">
+      <div class="user-panel user-a">
+        <div class="user-header">
+          <div class="user-avatar">A</div>
+          <div class="user-info">
+            <h2>user-a</h2>
+            <div class="user-status" id="user-a-status">Ready to start</div>
+          </div>
+        </div>
+        <div class="sessions-list" id="user-a-sessions">
+          <div style="color: var(--text-muted); font-size: 0.85rem;">No sessions yet</div>
+        </div>
+      </div>
+
+      <div class="user-panel user-b">
+        <div class="user-header">
+          <div class="user-avatar">B</div>
+          <div class="user-info">
+            <h2>user-b</h2>
+            <div class="user-status" id="user-b-status">Ready to start</div>
+          </div>
+        </div>
+        <div class="sessions-list" id="user-b-sessions">
+          <div style="color: var(--text-muted); font-size: 0.85rem;">No sessions yet</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="timeline-panel">
+      <div class="timeline-header">
+        <h3>📜 Interaction Timeline</h3>
+      </div>
+      <div class="timeline" id="timeline">
+        <div style="color: var(--text-muted); text-align: center; padding: 2rem;">Waiting for demo to start...</div>
+      </div>
+    </div>
+
+    <div class="log-panel">
+      <div class="log-header">
+        <h3>📋 API Log</h3>
+      </div>
+      <div class="log-console" id="log-console">
+        <div class="log-entry">
+          <span class="timestamp">--:--:--</span>
+          <span class="message">Ready</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let isRunning = false;
+    let demoInterval = null;
+    let userASessions = [];
+    let userBSessions = [];
+    let activeLink = null;
+    let step = 0;
+    const stats = { sessions: 0, messages: 0, notifications: 0, links: 0 };
+
+    function getBaseUrl() { return document.getElementById('serverUrl').value.trim(); }
+
+    function updateStats(key) {
+      stats[key]++;
+      document.getElementById('stat-' + key).textContent = stats[key];
+    }
+
+    function addLog(message, type) {
+      type = type || 'info';
+      var consoleEl = document.getElementById('log-console');
+      var now = new Date();
+      var time = now.toLocaleTimeString('en-US', { hour12: false });
+      var entry = document.createElement('div');
+      entry.className = 'log-entry ' + type;
+      entry.innerHTML = '<span class="timestamp">' + time + '</span><span class="message">' + message + '</span>';
+      consoleEl.appendChild(entry);
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    function addTimelineEvent(user, type, content) {
+      var timeline = document.getElementById('timeline');
+      var firstMsg = timeline.querySelector('.timeline-item');
+      if (firstMsg) firstMsg.remove();
+      var now = new Date();
+      var time = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      var item = document.createElement('div');
+      item.className = 'timeline-item' + (user === 'B' ? ' user-b' : '');
+      item.innerHTML = '<div class="time">' + time + '</div><div><span class="type">' + type + '</span><span class="content">' + content + '</span></div>';
+      timeline.insertBefore(item, timeline.firstChild);
+    }
+
+    function updateStatus(user, status) {
+      document.getElementById('user-' + user + '-status').textContent = status;
+    }
+
+    function updateSessionsList(user, sessions) {
+      var container = document.getElementById('user-' + user + '-sessions');
+      if (sessions.length === 0) {
+        container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem;">No sessions yet</div>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < sessions.length; i++) {
+        var s = sessions[i];
+        html += '<div class="session-item' + (i === 0 ? ' active' : '') + '">' +
+          '<span class="id">' + s.sessionId.slice(0, 8) + '...</span>' +
+          '<span class="project">' + (s.project || 'default') + '</span></div>';
+      }
+      container.innerHTML = html;
+    }
+
+    async function apiRequest(method, path, body, userId) {
+      var baseUrl = getBaseUrl();
+      var url = baseUrl + path;
+      var headers = { 'Content-Type': 'application/json', 'X-User-ID': userId };
+      try {
+        var response = await fetch(url, { method: method, headers: headers, body: body ? JSON.stringify(body) : null });
+        var data = await response.json();
+        return { ok: response.ok, status: response.status, data: data };
+      } catch (error) {
+        return { ok: false, status: 0, data: { error: error.message } };
+      }
+    }
+
+    async function step1_createUserASessions() {
+      updateStatus('a', 'Creating sessions...');
+      addLog('Creating sessions for user-a...', 'info');
+      var res1 = await apiRequest('POST', '/sessions', { project: 'project-alpha' }, 'user-a');
+      if (!res1.ok) throw new Error('Failed to create session 1');
+      userASessions.push({ sessionId: res1.data.sessionId, project: 'project-alpha' });
+      updateStats('sessions');
+      addLog('✓ Created session for user-a: ' + res1.data.sessionId.slice(0, 8) + '...', 'success');
+      await sleep(500);
+      var res2 = await apiRequest('POST', '/sessions', { project: 'project-beta' }, 'user-a');
+      if (!res2.ok) throw new Error('Failed to create session 2');
+      userASessions.push({ sessionId: res2.data.sessionId, project: 'project-beta' });
+      updateStats('sessions');
+      addLog('✓ Created session for user-a: ' + res2.data.sessionId.slice(0, 8) + '...', 'success');
+      updateSessionsList('a', userASessions);
+      updateStatus('a', userASessions.length + ' sessions active');
+      addTimelineEvent('A', 'SESSION', 'Created ' + userASessions.length + ' sessions');
+    }
+
+    async function step2_createUserBSessions() {
+      updateStatus('b', 'Creating sessions...');
+      addLog('Creating sessions for user-b...', 'info');
+      var res = await apiRequest('POST', '/sessions', { project: 'project-gamma' }, 'user-b');
+      if (!res.ok) throw new Error('Failed to create session');
+      userBSessions.push({ sessionId: res.data.sessionId, project: 'project-gamma' });
+      updateStats('sessions');
+      addLog('✓ Created session for user-b: ' + res.data.sessionId.slice(0, 8) + '...', 'success');
+      updateSessionsList('b', userBSessions);
+      updateStatus('b', userBSessions.length + ' sessions active');
+      addTimelineEvent('B', 'SESSION', 'Created ' + userBSessions.length + ' sessions');
+    }
+
+    async function step3_setupProfiles() {
+      addLog('Setting up user profiles...', 'info');
+      await apiRequest('PUT', '/me/profile', { displayName: 'Alice (Developer)', skills: ['typescript', 'rust'], currentProjects: ['cc-agents'], messagePermission: 'everyone' }, 'user-a');
+      await apiRequest('PUT', '/me/profile', { displayName: 'Bob (Designer)', skills: ['figma', 'ui/ux'], currentProjects: ['cc-agents'], messagePermission: 'everyone' }, 'user-b');
+      addLog('✓ Profiles configured', 'success');
+      addTimelineEvent('A', 'PROFILE', 'Updated profile with skills');
+      addTimelineEvent('B', 'PROFILE', 'Updated profile with skills');
+    }
+
+    async function step4_sendCrossSessionMessage() {
+      updateStatus('a', 'Sending message...');
+      addLog('Sending cross-session message from A to A...', 'info');
+      var targetSession = userASessions[1];
+      if (!targetSession) throw new Error('No target session');
+      var res = await apiRequest('POST', '/sessions/' + userASessions[0].sessionId + '/send', { targetSessionId: targetSession.sessionId, type: 'task', content: 'Please review the auth module changes' }, 'user-a');
+      if (!res.ok) throw new Error('Failed to send message');
+      updateStats('messages');
+      addLog('✓ Message sent between user-a sessions', 'success');
+      addTimelineEvent('A', 'MESSAGE', 'Sent task to other session');
+    }
+
+    async function step5_broadcastMessage() {
+      updateStatus('a', 'Broadcasting...');
+      addLog('Broadcasting to all user-a sessions...', 'info');
+      var res = await apiRequest('POST', '/sessions/' + userASessions[0].sessionId + '/broadcast', { type: 'announcement', content: 'Team meeting in 5 minutes!' }, 'user-a');
+      if (!res.ok) throw new Error('Failed to broadcast');
+      updateStats('messages');
+      addLog('✓ Broadcast to ' + res.data.count + ' sessions', 'success');
+      addTimelineEvent('A', 'BROADCAST', 'Sent to ' + res.data.count + ' sessions');
+    }
+
+    async function step6_sendNotification() {
+      updateStatus('a', 'Sending notification...');
+      addLog('Sending notification from user-a to user-b...', 'info');
+      var res = await apiRequest('POST', '/users/user-b/notify', { type: 'alert', content: 'New design review request from Alice' }, 'user-a');
+      if (!res.ok) throw new Error('Failed to send notification');
+      updateStats('notifications');
+      addLog('✓ Notification sent to user-b', 'success');
+      addTimelineEvent('A', 'NOTIFY', 'Sent alert to user-b');
+    }
+
+    async function step7_createLink() {
+      updateStatus('a', 'Creating link invitation...');
+      addLog('Creating session link invitation...', 'info');
+      var res = await apiRequest('POST', '/sessions/' + userASessions[0].sessionId + '/links', { targetUserId: 'user-b', mode: 'bidirectional', initialMessage: "Let's collaborate on the new feature!" }, 'user-a');
+      if (!res.ok) throw new Error('Failed to create link');
+      activeLink = res.data.link;
+      updateStats('links');
+      addLog('✓ Link invitation created: ' + activeLink.id.slice(0, 8) + '...', 'success');
+      addTimelineEvent('A', 'LINK', 'Sent collaboration invite to user-b');
+    }
+
+    async function step8_acceptLink() {
+      updateStatus('b', 'Accepting link...');
+      addLog('user-b accepting link invitation...', 'info');
+      var res = await apiRequest('POST', '/me/links/invitations/' + activeLink.id + '/accept', { sessionId: userBSessions[0].sessionId }, 'user-b');
+      if (!res.ok) throw new Error('Failed to accept link');
+      activeLink.status = 'active';
+      addLog('✓ Link accepted - sessions connected!', 'success');
+      addTimelineEvent('B', 'LINK', 'Accepted collaboration link');
+    }
+
+    async function step9_sendLinkedMessage() {
+      updateStatus('a', 'Sending linked message...');
+      addLog('Sending message through active link...', 'info');
+      var res = await apiRequest('POST', '/sessions/' + userASessions[0].sessionId + '/links/' + activeLink.id + '/messages', { content: 'Hey Bob! Check out the new API endpoint +user-b' }, 'user-a');
+      if (!res.ok) throw new Error('Failed to send linked message');
+      updateStats('messages');
+      addLog('✓ Message sent through link (mentions parsed)', 'success');
+      addTimelineEvent('A', 'LINK-MSG', 'Sent message via active link');
+    }
+
+    async function step10_checkNotifications() {
+      updateStatus('b', 'Checking notifications...');
+      addLog('user-b checking notifications...', 'info');
+      var res = await apiRequest('GET', '/me/notifications', null, 'user-b');
+      if (!res.ok) throw new Error('Failed to get notifications');
+      var unread = res.data.unread || 0;
+      addLog('✓ Found ' + unread + ' unread notifications', 'success');
+      addTimelineEvent('B', 'CHECK', 'Checked ' + unread + ' notifications');
+    }
+
+    async function runDemoStep() {
+      if (!isRunning) return;
+      try {
+        if (step === 0) await step1_createUserASessions();
+        else if (step === 1) await step2_createUserBSessions();
+        else if (step === 2) await step3_setupProfiles();
+        else if (step === 3) await step4_sendCrossSessionMessage();
+        else if (step === 4) await step5_broadcastMessage();
+        else if (step === 5) await step6_sendNotification();
+        else if (step === 6) await step7_createLink();
+        else if (step === 7) await step8_acceptLink();
+        else if (step === 8) await step9_sendLinkedMessage();
+        else if (step === 9) await step10_checkNotifications();
+        else { addLog('🎉 Demo complete! Restarting...', 'info'); step = -1; }
+        step++;
+      } catch (error) {
+        addLog('❌ Error: ' + error.message, 'error');
+        stopDemo();
+      }
+    }
+
+    function sleep(ms) { return new Promise(function(resolve) { setTimeout(resolve, ms); }); }
+
+    async function toggleDemo() {
+      if (isRunning) stopDemo(); else startDemo();
+    }
+
+    function startDemo() {
+      isRunning = true;
+      document.getElementById('startBtn').textContent = '⏹️ Stop Demo';
+      document.getElementById('startBtn').className = 'btn btn-primary btn-large btn-running';
+      addLog('🚀 Demo started', 'info');
+      runDemo();
+    }
+
+    async function runDemo() {
+      while (isRunning) { await runDemoStep(); await sleep(1500); }
+    }
+
+    function stopDemo() {
+      isRunning = false;
+      document.getElementById('startBtn').textContent = '▶️ Start Demo';
+      document.getElementById('startBtn').className = 'btn btn-primary btn-large';
+      addLog('⏹️ Demo stopped', 'info');
+    }
+
+    function resetAll() {
+      stopDemo();
+      step = 0;
+      userASessions = [];
+      userBSessions = [];
+      activeLink = null;
+      stats.sessions = 0; stats.messages = 0; stats.notifications = 0; stats.links = 0;
+      document.getElementById('stat-sessions').textContent = '0';
+      document.getElementById('stat-messages').textContent = '0';
+      document.getElementById('stat-notifications').textContent = '0';
+      document.getElementById('stat-links').textContent = '0';
+      document.getElementById('timeline').innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 2rem;">Waiting for demo to start...</div>';
+      document.getElementById('user-a-sessions').innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem;">No sessions yet</div>';
+      document.getElementById('user-b-sessions').innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem;">No sessions yet</div>';
+      updateStatus('a', 'Ready to start');
+      updateStatus('b', 'Ready to start');
+      addLog('🔄 Reset complete', 'info');
+    }
+
+    function clearLogs() {
+      document.getElementById('log-console').innerHTML = '<div class="log-entry"><span class="timestamp">--:--:--</span><span class="message">Logs cleared</span></div>';
+    }
+
+    addLog('Demo ready. Click Start to begin.', 'info');
+  </script>
+</body>
+</html>

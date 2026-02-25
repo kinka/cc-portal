@@ -1,4 +1,5 @@
 // 用 bun 启动演示页面服务器
+import { existsSync } from "fs";
 import { serve } from "bun";
 
 const server = serve({
@@ -14,12 +15,12 @@ const server = serve({
 
     const filePath = `./${path}`;
 
-    try {
-      const file = Bun.file(filePath);
-      return new Response(file);
-    } catch {
+    if (!existsSync(filePath)) {
       return new Response("Not Found", { status: 404 });
     }
+
+    const file = Bun.file(filePath);
+    return new Response(file);
   },
 });
 

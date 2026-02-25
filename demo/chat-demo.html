@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CC-Agents 共享 Session 演示</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --bg-card: #161b22;
+      --bg-hover: #21262d;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --accent-dim: rgba(88, 166, 255, 0.1);
+      --user-a: #7ee787;
+      --user-b: #f778ba;
+      --claude: #e3b341;
+      --success: #3fb950;
+      --danger: #f85149;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+    header {
+      text-align: center;
+      padding: 28px 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      background: linear-gradient(90deg, var(--user-a), var(--accent), var(--user-b));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle { color: var(--text-muted); font-size: 13px; }
+
+    /* Flow description */
+    .flow-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+
+    .flow-step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .flow-step .num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .flow-step code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--accent);
+      background: var(--accent-dim);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 9px 20px;
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-secondary { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--accent); }
+    .btn-danger { background: rgba(248, 81, 73, 0.15); color: var(--danger); border: 1px solid rgba(248, 81, 73, 0.3); }
+    .btn-danger:hover { border-color: var(--danger); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Session info bar */
+    .session-bar {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      flex-wrap: wrap;
+    }
+
+    .session-bar .label { color: var(--text-muted); }
+    .session-bar .val { color: var(--accent); }
+    .session-bar .sep { color: var(--border); }
+
+    /* Main panels */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .chat-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 560px;
+    }
+
+    .chat-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .chat-header.user-a { background: linear-gradient(90deg, rgba(126,231,135,0.08), transparent); }
+    .chat-header.user-b { background: linear-gradient(90deg, rgba(247,120,186,0.08), transparent); }
+
+    .avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 15px;
+    }
+
+    .avatar.a { background: rgba(126,231,135,0.15); color: var(--user-a); border: 2px solid var(--user-a); }
+    .avatar.b { background: rgba(247,120,186,0.15); color: var(--user-b); border: 2px solid var(--user-b); }
+
+    .header-info h3 { font-size: 14px; font-weight: 600; }
+    .header-info .status { font-size: 11px; color: var(--text-muted); }
+
+    .header-actions { margin-left: auto; display: flex; gap: 6px; }
+
+    .icon-btn {
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      transition: all 0.15s;
+    }
+
+    .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    /* Messages */
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .msg {
+      max-width: 88%;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      line-height: 1.5;
+      animation: fadeIn 0.25s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .msg.system {
+      align-self: center;
+      background: transparent;
+      border: 1px dashed var(--border);
+      color: var(--text-muted);
+      font-size: 11px;
+      padding: 6px 14px;
+      max-width: 100%;
+      text-align: center;
+    }
+
+    .msg.from-a  { align-self: flex-start; background: rgba(126,231,135,0.1); border: 1px solid rgba(126,231,135,0.25); }
+    .msg.from-b  { align-self: flex-end;   background: rgba(247,120,186,0.1); border: 1px solid rgba(247,120,186,0.25); }
+    .msg.from-claude { align-self: flex-start; background: rgba(227,179,65,0.08); border: 1px solid rgba(227,179,65,0.2); }
+
+    .msg-meta {
+      font-size: 10px;
+      margin-bottom: 3px;
+      display: flex;
+      gap: 6px;
+    }
+
+    .msg-meta .who-a    { color: var(--user-a); font-weight: 600; }
+    .msg-meta .who-b    { color: var(--user-b); font-weight: 600; }
+    .msg-meta .who-c    { color: var(--claude); font-weight: 600; }
+    .msg-meta .ts       { color: var(--text-muted); }
+
+    /* Input */
+    .chat-input {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+    }
+
+    .chat-input input {
+      flex: 1;
+      padding: 8px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+    }
+
+    .chat-input input:focus { border-color: var(--accent); }
+    .chat-input input:disabled { opacity: 0.4; }
+
+    .chat-input .send-btn {
+      padding: 8px 16px;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .chat-input .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Spinner */
+    .spin {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>CC-Agents 共享 Session 演示</h1>
+    <p class="subtitle">Alice 遇到问题，直接拉 Bob 进来协作 — 无需确认，即时加入</p>
+  </header>
+
+  <div class="flow-card">
+    <div class="flow-step">
+      <span class="num">1</span>
+      Alice 创建 Session <code>POST /sessions</code>
+    </div>
+    <div class="flow-step">
+      <span class="num">2</span>
+      Alice 拉入 Bob <code>POST /sessions/:id/participants</code>
+    </div>
+    <div class="flow-step">
+      <span class="num">3</span>
+      Bob 读取历史 <code>GET /sessions/:id</code>
+    </div>
+    <div class="flow-step">
+      <span class="num">4</span>
+      双方通过 <code>POST /sessions/:id/messages</code> 回复
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-primary" id="btn-start" onclick="startScene()">▶ 开始演示</button>
+    <button class="btn btn-secondary" id="btn-reset" onclick="resetScene()">↺ 重置</button>
+    <button class="btn btn-danger" onclick="clearSessions()">✕ 清理 Sessions</button>
+  </div>
+
+  <div class="session-bar" id="session-bar" style="display:none">
+    <span class="label">Session ID</span>
+    <span class="val" id="bar-sid">—</span>
+    <span class="sep">|</span>
+    <span class="label">Owner</span>
+    <span class="val">alice</span>
+    <span class="sep">|</span>
+    <span class="label">Participants</span>
+    <span class="val" id="bar-participants">—</span>
+  </div>
+
+  <div class="main-grid">
+    <!-- Alice -->
+    <div class="chat-panel">
+      <div class="chat-header user-a">
+        <div class="avatar a">A</div>
+        <div class="header-info">
+          <h3>Alice <small style="font-weight:400;color:var(--text-muted)">owner</small></h3>
+          <span class="status" id="alice-status">等待开始...</span>
+        </div>
+        <div class="header-actions">
+          <button class="icon-btn" id="alice-refresh" onclick="refreshHistory('alice')" disabled title="刷新历史">↻ 刷新</button>
+        </div>
+      </div>
+      <div class="chat-messages" id="alice-messages">
+        <div class="msg system">演示开始后，Alice 创建 Session 并拉入 Bob</div>
+      </div>
+      <div class="chat-input">
+        <input type="text" id="alice-input" placeholder="发送给 Claude..." disabled
+               onkeydown="if(event.key==='Enter')sendMessage('alice')">
+        <button class="send-btn" id="alice-send" onclick="sendMessage('alice')" disabled>发送</button>
+      </div>
+    </div>
+
+    <!-- Bob -->
+    <div class="chat-panel">
+      <div class="chat-header user-b">
+        <div class="avatar b">B</div>
+        <div class="header-info">
+          <h3>Bob <small style="font-weight:400;color:var(--text-muted)">participant</small></h3>
+          <span class="status" id="bob-status">等待被加入...</span>
+        </div>
+        <div class="header-actions">
+          <button class="icon-btn" id="bob-refresh" onclick="refreshHistory('bob')" disabled title="刷新历史">↻ 刷新</button>
+        </div>
+      </div>
+      <div class="chat-messages" id="bob-messages">
+        <div class="msg system">Alice 将 Bob 直接拉入 Session 后，Bob 即可查看历史并回复</div>
+      </div>
+      <div class="chat-input">
+        <input type="text" id="bob-input" placeholder="发送给 Claude..." disabled
+               onkeydown="if(event.key==='Enter')sendMessage('bob')">
+        <button class="send-btn" id="bob-send" onclick="sendMessage('bob')" disabled>发送</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API = 'http://localhost:3333';
+  let sessionId = null;
+
+  // ── helpers ──────────────────────────────────────────────────────────────
+
+  async function req(method, path, body, userId) {
+    const res = await fetch(API + path, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, data };
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  function ts() {
+    return new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function addMsg(panel, type, content, who) {
+    const el = document.getElementById(panel + '-messages');
+    const div = document.createElement('div');
+
+    if (type === 'system') {
+      div.className = 'msg system';
+      div.textContent = content;
+    } else {
+      const whoClass = who === 'alice' ? 'from-a' : who === 'bob' ? 'from-b' : 'from-claude';
+      const whoLabel = who === 'alice' ? '<span class="who-a">Alice</span>'
+                     : who === 'bob'   ? '<span class="who-b">Bob</span>'
+                     :                   '<span class="who-c">Claude</span>';
+      div.className = 'msg ' + whoClass;
+      div.innerHTML = `<div class="msg-meta">${whoLabel}<span class="ts">${ts()}</span></div>${escHtml(content)}`;
+    }
+
+    el.appendChild(div);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function setStatus(user, text) {
+    document.getElementById(user + '-status').textContent = text;
+  }
+
+  function enableInput(user, enabled) {
+    document.getElementById(user + '-input').disabled = !enabled;
+    document.getElementById(user + '-send').disabled = !enabled;
+    document.getElementById(user + '-refresh').disabled = !enabled;
+  }
+
+  // ── refresh history ───────────────────────────────────────────────────────
+
+  async function refreshHistory(user) {
+    if (!sessionId) return;
+    const userId = user; // 'alice' or 'bob'
+    const r = await req('GET', `/sessions/${sessionId}`, null, userId);
+    if (!r.ok) {
+      addMsg(user, 'system', `刷新失败: ${r.data.error || r.status}`);
+      return;
+    }
+
+    const msgs = r.data.messages || [];
+    const el = document.getElementById(user + '-messages');
+    el.innerHTML = '';
+
+    if (msgs.length === 0) {
+      addMsg(user, 'system', '暂无消息记录');
+      return;
+    }
+
+    for (const m of msgs) {
+      const who = m.role === 'assistant' ? 'claude' : (m.from || 'alice');
+      addMsg(user, 'msg', m.content, who);
+    }
+    addMsg(user, 'system', `共 ${msgs.length} 条消息（已刷新）`);
+  }
+
+  // ── send message ──────────────────────────────────────────────────────────
+
+  async function sendMessage(user) {
+    const input = document.getElementById(user + '-input');
+    const content = input.value.trim();
+    if (!content || !sessionId) return;
+
+    input.value = '';
+    enableInput(user, false);
+    addMsg(user, 'msg', content, user);
+    setStatus(user, '发送中...');
+
+    const r = await req('POST', `/sessions/${sessionId}/messages`, {
+      message: content,
+      from: user,
+    }, user);
+
+    if (r.ok) {
+      const response = r.data.response;
+      addMsg(user, 'msg', response, 'claude');
+      setStatus(user, '已发送');
+    } else {
+      const errMsg = r.data.error || r.data.message || `HTTP ${r.status}`;
+      addMsg(user, 'system', `发送失败: ${errMsg}`);
+      setStatus(user, '发送失败');
+    }
+
+    enableInput(user, true);
+  }
+
+  // ── main scene ────────────────────────────────────────────────────────────
+
+  async function startScene() {
+    document.getElementById('btn-start').disabled = true;
+
+    addMsg('alice', 'system', '① Alice 创建 Session...');
+
+    const createR = await req('POST', '/sessions', { project: 'shared-demo' }, 'alice');
+    if (!createR.ok) {
+      addMsg('alice', 'system', `❌ 创建失败: ${JSON.stringify(createR.data)}`);
+      document.getElementById('btn-start').disabled = false;
+      return;
+    }
+
+    sessionId = createR.data.sessionId;
+    document.getElementById('session-bar').style.display = 'flex';
+    document.getElementById('bar-sid').textContent = sessionId.slice(0, 8) + '...';
+    document.getElementById('bar-participants').textContent = 'alice (owner)';
+
+    addMsg('alice', 'system', `✅ Session 已创建: ${sessionId.slice(0,8)}...`);
+    setStatus('alice', 'Session 已就绪');
+    enableInput('alice', true);
+
+    await sleep(700);
+
+    // ② Alice 直接拉入 Bob（一步，无需确认）
+    addMsg('alice', 'system', '② 直接拉入 Bob (POST /participants)...');
+
+    const addR = await req('POST', `/sessions/${sessionId}/participants`, { userId: 'bob' }, 'alice');
+    if (!addR.ok) {
+      addMsg('alice', 'system', `❌ 加入失败: ${JSON.stringify(addR.data)}`);
+      return;
+    }
+
+    document.getElementById('bar-participants').textContent = 'alice (owner), bob';
+    addMsg('alice', 'system', '✅ Bob 已加入，无需 Bob 操作任何确认');
+
+    await sleep(500);
+
+    // ③ Bob 侧：读取历史，了解来龙去脉
+    addMsg('bob', 'system', '③ Bob 被加入 Session，正在读取历史 (GET /sessions/:id)...');
+    setStatus('bob', '读取历史中...');
+
+    await sleep(400);
+    await refreshHistory('bob');
+    setStatus('bob', '已加入，可以回复');
+    enableInput('bob', true);
+
+    addMsg('alice', 'system', '演示完成！双方均可发送消息（需要 Claude 服务运行）');
+    addMsg('bob', 'system', '现在可以在输入框发送消息，或点击 ↻ 刷新查看最新历史');
+  }
+
+  // ── reset / clear ─────────────────────────────────────────────────────────
+
+  async function resetScene() {
+    if (sessionId) {
+      await req('DELETE', `/sessions/${sessionId}`, null, 'alice').catch(() => {});
+      sessionId = null;
+    }
+    document.getElementById('session-bar').style.display = 'none';
+    document.getElementById('bar-sid').textContent = '—';
+    document.getElementById('bar-participants').textContent = '—';
+    document.getElementById('alice-messages').innerHTML = '<div class="msg system">演示开始后，Alice 创建 Session 并拉入 Bob</div>';
+    document.getElementById('bob-messages').innerHTML  = '<div class="msg system">Alice 将 Bob 直接拉入 Session 后，Bob 即可查看历史并回复</div>';
+    setStatus('alice', '等待开始...');
+    setStatus('bob', '等待被加入...');
+    enableInput('alice', false);
+    enableInput('bob', false);
+    document.getElementById('btn-start').disabled = false;
+  }
+
+  async function clearSessions() {
+    if (!confirm('清理 alice 和 bob 的所有 Sessions？')) return;
+    for (const u of ['alice', 'bob']) {
+      const r = await req('GET', '/sessions', null, u);
+      if (r.ok && r.data.sessions) {
+        for (const s of r.data.sessions) {
+          await req('DELETE', `/sessions/${s.sessionId || s.id}`, null, u);
+        }
+      }
+    }
+    await resetScene();
+  }
+</script>
+</body>
+</html>
