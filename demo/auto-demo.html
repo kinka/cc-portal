@@ -388,22 +388,16 @@
     }
 
     async function step1_createUserASessions() {
-      updateStatus('a', 'Creating sessions...');
-      addLog('Creating sessions for user-a...', 'info');
+      updateStatus('a', 'Creating session...');
+      addLog('Creating session for user-a...', 'info');
       var res1 = await apiRequest('POST', '/sessions', { project: 'project-alpha' }, 'user-a');
-      if (!res1.ok) throw new Error('Failed to create session 1');
+      if (!res1.ok) throw new Error('Failed to create session: ' + JSON.stringify(res1.data));
       userASessions.push({ sessionId: res1.data.sessionId, project: 'project-alpha' });
       updateStats('sessions');
       addLog('✓ Created session for user-a: ' + res1.data.sessionId.slice(0, 8) + '...', 'success');
-      await sleep(500);
-      var res2 = await apiRequest('POST', '/sessions', { project: 'project-beta' }, 'user-a');
-      if (!res2.ok) throw new Error('Failed to create session 2');
-      userASessions.push({ sessionId: res2.data.sessionId, project: 'project-beta' });
-      updateStats('sessions');
-      addLog('✓ Created session for user-a: ' + res2.data.sessionId.slice(0, 8) + '...', 'success');
       updateSessionsList('a', userASessions);
-      updateStatus('a', userASessions.length + ' sessions active');
-      addTimelineEvent('A', 'SESSION', 'Created ' + userASessions.length + ' sessions');
+      updateStatus('a', '1 session active');
+      addTimelineEvent('A', 'SESSION', 'Created session for project-alpha');
     }
 
     async function step2_createUserBSessions() {
@@ -471,7 +465,7 @@
         else if (step === 2) await step3_setupProfiles();
         else if (step === 3) await step4_addParticipant();
         else if (step === 4) await step5_agentDelegation();
-        else { addLog('🎉 Demo complete! Restarting...', 'info'); step = -1; }
+        else { addLog('🎉 Demo complete! Click Start to run again.', 'success'); stopDemo(); return; }
         step++;
       } catch (error) {
         addLog('❌ Error: ' + error.message, 'error');
@@ -509,7 +503,6 @@
       step = 0;
       userASessions = [];
       userBSessions = [];
-      activeLink = null;
       stats.sessions = 0; stats.messages = 0; stats.agents = 0; stats.writebacks = 0;
       document.getElementById('stat-sessions').textContent = '0';
       document.getElementById('stat-messages').textContent = '0';

@@ -117,7 +117,7 @@ export class ClaudeSessionManager {
 
     const userSessionCount = this.db.getUserSessionCount(ownerId);
     const user = this.db.getUser(ownerId);
-    const maxSessions = user?.maxSessions || 5;
+    const maxSessions = user?.maxSessions || 200;
 
     if (userSessionCount >= maxSessions) {
       throw new Error(`Session quota exceeded. Max ${maxSessions} sessions allowed.`);
