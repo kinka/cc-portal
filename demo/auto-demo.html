@@ -260,8 +260,8 @@
         <div class="stat-label">Agents Delegated</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value" id="stat-links">0</div>
-        <div class="stat-label">Links Active</div>
+        <div class="stat-value" id="stat-writebacks">0</div>
+        <div class="stat-label">Write-backs</div>
       </div>
     </div>
 
@@ -320,9 +320,8 @@
     let demoInterval = null;
     let userASessions = [];
     let userBSessions = [];
-    let activeLink = null;
     let step = 0;
-    const stats = { sessions: 0, messages: 0, agents: 0, links: 0 };
+    const stats = { sessions: 0, messages: 0, agents: 0, writebacks: 0 };
 
     function getBaseUrl() { return document.getElementById('serverUrl').value.trim(); }
 
@@ -429,29 +428,7 @@
       addTimelineEvent('B', 'PROFILE', 'Updated profile with skills');
     }
 
-    async function step4_sendCrossSessionMessage() {
-      updateStatus('a', 'Sending message...');
-      addLog('Sending cross-session message from A to A...', 'info');
-      var targetSession = userASessions[1];
-      if (!targetSession) throw new Error('No target session');
-      var res = await apiRequest('POST', '/sessions/' + userASessions[0].sessionId + '/send', { targetSessionId: targetSession.sessionId, type: 'task', content: 'Please review the auth module changes' }, 'user-a');
-      if (!res.ok) throw new Error('Failed to send message');
-      updateStats('messages');
-      addLog('✓ Message sent between user-a sessions', 'success');
-      addTimelineEvent('A', 'MESSAGE', 'Sent task to other session');
-    }
-
-    async function step5_broadcastMessage() {
-      updateStatus('a', 'Broadcasting...');
-      addLog('Broadcasting to all user-a sessions...', 'info');
-      var res = await apiRequest('POST', '/sessions/' + userASessions[0].sessionId + '/broadcast', { type: 'announcement', content: 'Team meeting in 5 minutes!' }, 'user-a');
-      if (!res.ok) throw new Error('Failed to broadcast');
-      updateStats('messages');
-      addLog('✓ Broadcast to ' + res.data.count + ' sessions', 'success');
-      addTimelineEvent('A', 'BROADCAST', 'Sent to ' + res.data.count + ' sessions');
-    }
-
-    async function step6_addParticipant() {
+    async function step4_addParticipant() {
       updateStatus('a', 'Adding Bob as participant...');
       addLog('Adding user-b as participant to Alice session...', 'info');
       var res = await apiRequest('POST', '/sessions/' + userASessions[0].sessionId + '/participants', { userId: 'user-b' }, 'user-a');
@@ -460,38 +437,7 @@
       addTimelineEvent('A', 'PARTICIPANT', 'Added user-b to session');
     }
 
-    async function step7_createLink() {
-      updateStatus('a', 'Creating link invitation...');
-      addLog('Creating session link invitation...', 'info');
-      var res = await apiRequest('POST', '/sessions/' + userASessions[0].sessionId + '/links', { targetUserId: 'user-b', mode: 'bidirectional', initialMessage: "Let's collaborate on the new feature!" }, 'user-a');
-      if (!res.ok) throw new Error('Failed to create link');
-      activeLink = res.data.link;
-      updateStats('links');
-      addLog('✓ Link invitation created: ' + activeLink.id.slice(0, 8) + '...', 'success');
-      addTimelineEvent('A', 'LINK', 'Sent collaboration invite to user-b');
-    }
-
-    async function step8_acceptLink() {
-      updateStatus('b', 'Accepting link...');
-      addLog('user-b accepting link invitation...', 'info');
-      var res = await apiRequest('POST', '/me/links/invitations/' + activeLink.id + '/accept', { sessionId: userBSessions[0].sessionId }, 'user-b');
-      if (!res.ok) throw new Error('Failed to accept link');
-      activeLink.status = 'active';
-      addLog('✓ Link accepted - sessions connected!', 'success');
-      addTimelineEvent('B', 'LINK', 'Accepted collaboration link');
-    }
-
-    async function step9_sendLinkedMessage() {
-      updateStatus('a', 'Sending linked message...');
-      addLog('Sending message through active link...', 'info');
-      var res = await apiRequest('POST', '/sessions/' + userASessions[0].sessionId + '/links/' + activeLink.id + '/messages', { content: 'Hey Bob! Check out the new API endpoint +user-b' }, 'user-a');
-      if (!res.ok) throw new Error('Failed to send linked message');
-      updateStats('messages');
-      addLog('✓ Message sent through link (mentions parsed)', 'success');
-      addTimelineEvent('A', 'LINK-MSG', 'Sent message via active link');
-    }
-
-    async function step10_agentDelegation() {
+    async function step5_agentDelegation() {
       // Alice creates a session owned by Bob (agent delegation)
       updateStatus('a', 'Delegating task to Bob agent...');
       addLog('Alice creates session with ownerId: "user-b" (agent delegation)...', 'info');
@@ -512,7 +458,8 @@
       var writeBackRes = await apiRequest('POST', '/sessions/' + userASessions[0].sessionId + '/messages', { message: 'Task complete! Analysis done ✓', from: 'user-b' }, 'user-b');
       if (!writeBackRes.ok) throw new Error('Bob write-back failed: ' + JSON.stringify(writeBackRes.data));
       updateStats('messages');
-      addLog('✓ Bob wrote back to Alice session directly (no notification needed)', 'success');
+      updateStats('writebacks');
+      addLog('✓ Bob wrote back to Alice session directly (no link/notification needed)', 'success');
       addTimelineEvent('B', 'WRITE-BACK', 'Sent result to Alice session');
     }
 
@@ -522,13 +469,8 @@
         if (step === 0) await step1_createUserASessions();
         else if (step === 1) await step2_createUserBSessions();
         else if (step === 2) await step3_setupProfiles();
-        else if (step === 3) await step4_sendCrossSessionMessage();
-        else if (step === 4) await step5_broadcastMessage();
-        else if (step === 5) await step6_addParticipant();
-        else if (step === 6) await step7_createLink();
-        else if (step === 7) await step8_acceptLink();
-        else if (step === 8) await step9_sendLinkedMessage();
-        else if (step === 9) await step10_agentDelegation();
+        else if (step === 3) await step4_addParticipant();
+        else if (step === 4) await step5_agentDelegation();
         else { addLog('🎉 Demo complete! Restarting...', 'info'); step = -1; }
         step++;
       } catch (error) {
@@ -568,11 +510,11 @@
       userASessions = [];
       userBSessions = [];
       activeLink = null;
-      stats.sessions = 0; stats.messages = 0; stats.agents = 0; stats.links = 0;
+      stats.sessions = 0; stats.messages = 0; stats.agents = 0; stats.writebacks = 0;
       document.getElementById('stat-sessions').textContent = '0';
       document.getElementById('stat-messages').textContent = '0';
       document.getElementById('stat-agents').textContent = '0';
-      document.getElementById('stat-links').textContent = '0';
+      document.getElementById('stat-writebacks').textContent = '0';
       document.getElementById('timeline').innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 2rem;">Waiting for demo to start...</div>';
       document.getElementById('user-a-sessions').innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem;">No sessions yet</div>';
       document.getElementById('user-b-sessions').innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem;">No sessions yet</div>';

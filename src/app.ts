@@ -9,19 +9,12 @@ import type { PermissionResult } from './sdk-types';
 import { logger, isDev } from './logger';
 import { registerAuthMiddleware, requireUserContext } from './middleware/auth';
 import { registerAdminRoutes } from './admin-routes';
-import { SessionRegistry } from './crossSession/SessionRegistry';
-import { MessageRouter } from './crossSession/MessageRouter';
 import { UserDirectory } from './crossSession/UserDirectory';
-import { SessionLinkManager } from './crossSession/SessionLinkManager';
-import { registerCrossSessionRoutes } from './routes/crossSessionRoutes';
 import { registerCrossUserRoutes } from './routes/crossUserRoutes';
-import { registerSessionLinkRoutes } from './routes/sessionLinkRoutes';
 import { registerParticipantRoutes } from './routes/participantRoutes';
 interface BuildAppOptions {
   sessionManager?: ClaudeSessionManager;
   db?: DatabaseManager;
-  /** Override for testing; prod creates its own instances */
-  registry?: SessionRegistry;
   /** Memory manager for long-term user memory */
   memoryManager?: MemoryManager;
 }
@@ -34,11 +27,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
   const manager = options.sessionManager;
   const db = options.db;
 
-  // Cross-session infrastructure (shared singletons for this app instance)
-  const registry = options.registry ?? new SessionRegistry();
-  const messageRouter = new MessageRouter(registry);
   const userDirectory = new UserDirectory();
-  const sessionLinkManager = new SessionLinkManager(registry, userDirectory);
   
   // Memory manager for long-term user memory
   const memoryManager = options.memoryManager ?? new MemoryManager('./memory');
@@ -82,10 +71,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
     registerAdminRoutes(fastify, db);
   }
 
-  // Register cross-session / cross-user / session-link routes
-  registerCrossSessionRoutes(fastify, messageRouter, registry);
   registerCrossUserRoutes(fastify, userDirectory);
-  registerSessionLinkRoutes(fastify, sessionLinkManager, registry, userDirectory);
 
   // Register participant routes
   if (db) {
@@ -182,8 +168,6 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
         bypassPermission: body.bypassPermission,
       });
 
-      // Register in cross-session registry
-      registry.register(session.id, ownerId, body.project);
       // Auto-touch user in directory
       userDirectory.upsertProfile(ownerId);
 
@@ -399,10 +383,6 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
       reply.status(404);
       return { error: 'Session not found or access denied' };
     }
-
-    // Unregister from cross-session infrastructure
-    registry.unregister(sessionId);
-    sessionLinkManager.disconnectAll(sessionId);
 
     return { sessionId, status: 'deleted' };
   });
