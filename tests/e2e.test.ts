@@ -662,8 +662,8 @@ describe('Shared Session (direct participant add)', () => {
         body: JSON.stringify({ userId: participant }),
       });
 
-      // Participant reads session history via GET /sessions/:id
-      const getRes = await fetch(`${base}/sessions/${sessionId}`, {
+      // Participant reads session history via GET /sessions/:id/messages
+      const getRes = await fetch(`${base}/sessions/${sessionId}/messages`, {
         headers: { 'X-User-ID': participant },
       });
       expect(getRes.status).toBe(200);
@@ -675,7 +675,7 @@ describe('Shared Session (direct participant add)', () => {
     }
   });
 
-  test('non-participant cannot access session', async () => {
+  test('non-participant cannot access session messages', async () => {
     const { app } = makeApp();
     await app.listen({ port: 0, host: '127.0.0.1' });
     const port = (app.server!.address() as { port: number }).port;
@@ -691,7 +691,8 @@ describe('Shared Session (direct participant add)', () => {
       });
       const { sessionId } = (await createRes.json()) as { sessionId: string };
 
-      const getRes = await fetch(`${base}/sessions/${sessionId}`, {
+      // Stranger tries to read messages via GET /sessions/:id/messages
+      const getRes = await fetch(`${base}/sessions/${sessionId}/messages`, {
         headers: { 'X-User-ID': stranger },
       });
       expect(getRes.status).toBe(404);

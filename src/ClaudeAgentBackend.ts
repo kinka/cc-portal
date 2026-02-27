@@ -2,6 +2,10 @@ import { EventEmitter } from 'node:events';
 import { spawn, execSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface, type Interface } from 'node:readline';
 import { createLogger } from './logger';
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 
 const log = createLogger({ module: 'ClaudeAgent' });
 import type {
@@ -29,6 +33,46 @@ export type {
   CanCallToolCallback,
   PermissionMode,
 } from './sdk-types';
+
+/** Tool use record from assistant message */
+export interface ToolUse {
+  id: string;
+  name: string;
+  input: unknown;
+}
+
+/** Tool result record */
+export interface ToolResult {
+  tool_use_id: string;
+  content: unknown;
+  is_error?: boolean;
+}
+
+/** History message format for external consumption */
+export interface HistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  /** Tool calls made by assistant (if any) */
+  toolUses?: ToolUse[];
+  /** Tool results returned to assistant (if any) */
+  toolResults?: ToolResult[];
+}
+
+/** Raw history entry from CLI jsonl file */
+export interface RawHistoryEntry {
+  type: string;
+  timestamp?: string;
+  tool_name?: string;
+  tool_input?: unknown;
+  tool_output?: unknown;
+  content?: string;
+  message?: {
+    role?: string;
+    content?: string | Array<{ type?: string; text?: string; id?: string; name?: string; input?: unknown; tool_use_id?: string }>;
+  };
+  [key: string]: unknown;
+}
 
 /** Stream chunk types aligned with happy-cli message handling */
 export interface StreamChunk {
@@ -515,16 +559,125 @@ export class ClaudeAgentBackend extends EventEmitter {
   }
 
   /**
-   * Retrieve conversation history from Claude CLI.
-   * Note: Claude CLI doesn't expose history directly through the stream-json protocol.
-   * The conversation continues seamlessly when using --resume, but historical messages
-   * are not re-sent. This method returns empty array as history is maintained in-memory
-   * by the HTTP service during the session lifecycle.
+   * Calculate project hash for Claude CLI storage path.
+   * Claude CLI uses a hash of the absolute project path to store session data.
+   * The hash format is: base64url encoding of the path with special character replacements.
    */
-  async getHistory(): Promise<Array<{ role: 'user' | 'assistant'; content: string; timestamp?: Date }>> {
-    // Claude CLI doesn't send historical messages on resume
-    // History is maintained in-memory during the HTTP session
-    return [];
+  private static calculateProjectHash(projectPath: string): string {
+    // Claude CLI replaces certain characters in the path for filesystem compatibility
+    // It replaces '/' with '-' and other special chars
+    const normalized = projectPath
+      .split('/')
+      .filter(Boolean)
+      .join('-');
+    return `-${normalized}`;
+  }
+
+  /**
+   * Load conversation history from Claude CLI's local storage.
+   * Claude CLI stores session data in ~/.claude/projects/{project-hash}/{sessionId}.jsonl
+   *
+   * This method returns a simplified view of the conversation with just user/assistant messages.
+   * For full details including tool calls, use getHistoryDetailed().
+   */
+  async getHistory(): Promise<HistoryMessage[]> {
+    try {
+      const projectHash = ClaudeAgentBackend.calculateProjectHash(this.cwd);
+      const claudeDir = join(homedir(), '.claude');
+      const projectsDir = join(claudeDir, 'projects');
+      const projectDir = join(projectsDir, projectHash);
+      const sessionFile = join(projectDir, `${this.claudeSessionId}.jsonl`);
+
+      // Check if file exists
+      if (!existsSync(sessionFile)) {
+        log.debug({ sessionFile, sessionId: this.claudeSessionId }, 'Session file not found');
+        return [];
+      }
+
+      // Read and parse the jsonl file
+      const content = readFileSync(sessionFile, 'utf-8');
+      const lines = content.split('\n').filter(line => line.trim());
+      const messages: HistoryMessage[] = [];
+
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line) as RawHistoryEntry;
+
+          // Only process user and assistant messages
+          if (entry.type !== 'user' && entry.type !== 'assistant') {
+            continue;
+          }
+
+          // Extract content from message
+          let contentStr = '';
+          if (typeof entry.message?.content === 'string') {
+            contentStr = entry.message.content;
+          } else if (Array.isArray(entry.message?.content)) {
+            // Handle array content (text, tool_use, etc.)
+            contentStr = entry.message.content
+              .filter((c) => c.type === 'text')
+              .map((c) => c.text || '')
+              .join('');
+          }
+
+          if (contentStr) {
+            messages.push({
+              role: (entry.message?.role || (entry.type === 'user' ? 'user' : 'assistant')) as 'user' | 'assistant',
+              content: contentStr,
+              timestamp: new Date(entry.timestamp || new Date()),
+            });
+          }
+        } catch (parseErr) {
+          log.warn({ parseErr, line: line.substring(0, 100) }, 'Failed to parse history line');
+        }
+      }
+
+      log.info({ sessionId: this.claudeSessionId, count: messages.length }, 'Loaded history from CLI');
+      return messages;
+    } catch (err) {
+      log.warn({ err, sessionId: this.claudeSessionId }, 'Failed to load history from CLI');
+      return [];
+    }
+  }
+
+  /**
+   * Load detailed conversation history including tool calls and results.
+   * This returns the full conversation with all tool interaction details.
+   */
+  async getHistoryDetailed(): Promise<RawHistoryEntry[]> {
+    try {
+      const projectHash = ClaudeAgentBackend.calculateProjectHash(this.cwd);
+      const claudeDir = join(homedir(), '.claude');
+      const projectsDir = join(claudeDir, 'projects');
+      const projectDir = join(projectsDir, projectHash);
+      const sessionFile = join(projectDir, `${this.claudeSessionId}.jsonl`);
+
+      // Check if file exists
+      if (!existsSync(sessionFile)) {
+        log.debug({ sessionFile, sessionId: this.claudeSessionId }, 'Session file not found');
+        return [];
+      }
+
+      // Read and parse the jsonl file
+      const content = readFileSync(sessionFile, 'utf-8');
+      const lines = content.split('\n').filter(line => line.trim());
+      const entries: RawHistoryEntry[] = [];
+
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line) as RawHistoryEntry;
+          entries.push(entry);
+        } catch (parseErr) {
+          log.warn({ parseErr, line: line.substring(0, 100) }, 'Failed to parse history line');
+        }
+      }
+
+      log.info({ sessionId: this.claudeSessionId, count: entries.length }, 'Loaded detailed history from CLI');
+      return entries;
+    } catch (err) {
+      log.warn({ err, sessionId: this.claudeSessionId }, 'Failed to load detailed history from CLI');
+      return [];
+    }
   }
 
   isProcessAlive(): boolean {

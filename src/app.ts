@@ -194,7 +194,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
   });
 
   fastify.get('/sessions/:sessionId', async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!manager) {
+    if (!manager || !db) {
       reply.status(503);
       return { error: 'Service not fully initialized' };
     }
@@ -209,16 +209,17 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
       return { error: 'Session not found or access denied' };
     }
 
+    // Return session metadata only (use /messages endpoint for history)
     return {
       sessionId: session.id,
       path: session.path,
       createdAt: session.createdAt.toISOString(),
-      messages: session.getMessages(),
+      status: 'active',
     };
   });
 
   fastify.post('/sessions/:sessionId/messages', async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!manager) {
+    if (!manager || !db) {
       reply.status(503);
       return { error: 'Service not fully initialized' };
     }
@@ -229,6 +230,19 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
 
     const session = await manager.getSession(sessionId, userContext.userId);
     if (!session) {
+      // Debug: check if session exists but user doesn't have access
+      const dbSession = db.getSession(sessionId);
+      if (dbSession) {
+        return {
+          error: 'Session not found or access denied',
+          debug: {
+            sessionExists: true,
+            sessionOwner: dbSession.ownerId,
+            requestingUser: userContext.userId,
+            isOwner: dbSession.ownerId === userContext.userId,
+          },
+        };
+      }
       reply.status(404);
       return { error: 'Session not found or access denied' };
     }
@@ -245,6 +259,49 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
       reply.status(500);
       return { error: 'Failed to send message', message: String(error) };
     }
+  });
+
+  /**
+   * GET /sessions/:sessionId/messages - Get message history
+   * Query params:
+   * - detailed: if true, returns full history including tool calls
+   * - limit: max number of messages to return (default: all)
+   */
+  fastify.get('/sessions/:sessionId/messages', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!manager || !db) {
+      reply.status(503);
+      return { error: 'Service not fully initialized' };
+    }
+
+    const userContext = requireUserContext(request);
+    const { sessionId } = request.params as { sessionId: string };
+    const { detailed, limit } = request.query as { detailed?: string; limit?: string };
+
+    const session = await manager.getSession(sessionId, userContext.userId);
+    if (!session) {
+      reply.status(404);
+      return { error: 'Session not found or access denied' };
+    }
+
+    // Load from CLI storage (source of truth)
+    const history = await session.loadHistoryFromCLI(detailed === '1' || detailed === 'true');
+
+    // Apply limit if specified
+    let messages = history;
+    if (limit && typeof limit === 'string') {
+      const limitNum = parseInt(limit, 10);
+      if (!isNaN(limitNum) && limitNum > 0) {
+        messages = history.slice(-limitNum);
+      }
+    }
+
+    return {
+      sessionId,
+      source: 'cli',
+      detailed: detailed === '1' || detailed === 'true',
+      count: messages.length,
+      messages,
+    };
   });
 
   fastify.get('/sessions/:sessionId/stream', async (request: FastifyRequest, reply: FastifyReply) => {

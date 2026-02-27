@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
-import { ClaudeAgentBackend, type StreamChunk } from './ClaudeAgentBackend';
+import { ClaudeAgentBackend, type StreamChunk, type HistoryMessage, type RawHistoryEntry } from './ClaudeAgentBackend';
 import type { CanCallToolCallback, PermissionMode, PermissionResult } from './sdk-types';
 import { createLogger } from './logger';
 
@@ -130,6 +130,13 @@ export class ClaudeSession extends EventEmitter {
     if (options.initialMessage) {
       this.sendMessage(options.initialMessage).catch(err =>
         this.log.error({ err }, 'Initial message failed')
+      );
+    }
+
+    // Auto-sync history when resuming an existing session
+    if (!options.isNewSession) {
+      this.syncHistory().catch(err =>
+        this.log.warn({ err }, 'Failed to sync history on resume')
       );
     }
   }
@@ -308,17 +315,28 @@ export class ClaudeSession extends EventEmitter {
       const history = await this.backend.getHistory();
       if (history.length > 0) {
         // Convert to Message format
-        this.messages = history.map(h => ({
+        this.messages = history.map((h: HistoryMessage) => ({
           id: randomUUID(),
           role: h.role,
           content: h.content,
-          timestamp: h.timestamp || new Date(),
+          timestamp: h.timestamp,
         }));
         this.log.info({ count: history.length }, 'Synced conversation history');
       }
     } catch (err) {
       this.log.warn({ err }, 'Failed to sync history');
     }
+  }
+
+  /**
+   * Load history from Claude CLI's local storage.
+   * @param detailed - If true, returns full history including tool calls and results
+   */
+  async loadHistoryFromCLI(detailed?: boolean): Promise<HistoryMessage[] | RawHistoryEntry[]> {
+    if (detailed) {
+      return this.backend.getHistoryDetailed();
+    }
+    return this.backend.getHistory();
   }
 
   /** Check if the underlying Claude process is alive. */

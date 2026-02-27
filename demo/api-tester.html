@@ -501,11 +501,35 @@
           <span class="endpoint">/sessions/:sessionId</span>
         </div>
         <div class="api-card-body">
+          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Get session metadata (without messages)</p>
           <label>Session ID</label>
           <input type="text" id="get-session-id" placeholder="session-id">
         </div>
         <button class="btn btn-primary" onclick="getSession()">Execute</button>
         <div id="response-get-session" class="response">
+          <div class="response-header">
+            <span class="status">-</span>
+            <span class="response-time">-</span>
+          </div>
+          <pre>-</pre>
+        </div>
+      </div>
+
+      <!-- Get Session Messages -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <span class="method get">GET</span>
+          <span class="endpoint">/sessions/:sessionId/messages</span>
+        </div>
+        <div class="api-card-body">
+          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Get message history from CLI storage</p>
+          <label>Session ID</label>
+          <input type="text" id="messages-session-id" placeholder="session-id">
+          <label style="margin-top: 0.75rem;">Query Params (optional)</label>
+          <input type="text" id="messages-query" placeholder="?detailed=true&limit=10">
+        </div>
+        <button class="btn btn-primary" onclick="getSessionMessages()">Execute</button>
+        <div id="response-get-messages" class="response">
           <div class="response-header">
             <span class="status">-</span>
             <span class="response-time">-</span>
@@ -849,6 +873,15 @@
       showResponse('response-get-session', result);
     }
 
+    async function getSessionMessages() {
+      const { userId } = getConfig();
+      const sessionId = document.getElementById('messages-session-id').value || currentSessionId;
+      const queryParam = document.getElementById('messages-query').value.trim();
+      const query = queryParam ? (queryParam.startsWith('?') ? queryParam : '?' + queryParam) : '';
+      const result = await apiRequest('GET', `/sessions/${sessionId}/messages${query}`, null, userId);
+      showResponse('response-get-messages', result);
+    }
+
     async function sendMessage() {
       const { userId } = getConfig();
       const sessionId = document.getElementById('msg-session-id').value || currentSessionId;
@@ -905,6 +938,7 @@
       // Auto-fill
       document.getElementById('get-session-id').value = session1;
       document.getElementById('msg-session-id').value = session1;
+      document.getElementById('messages-session-id').value = session1;
       document.getElementById('stream-session-id').value = session1;
       document.getElementById('delete-session-id').value = session1;
       document.getElementById('add-part-session').value = session1;

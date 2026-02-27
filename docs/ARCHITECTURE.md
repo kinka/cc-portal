@@ -196,61 +196,85 @@ function canAccessSession(sessionId: string, userId: string): boolean {
 
 ## 5. API 设计
 
-### 5.1 共享 Session API
+### 5.1 核心 Session API
 
 | 方法 | 路径 | 描述 | 权限 |
 |------|------|------|------|
+| GET | `/sessions` | 列出当前用户的会话列表 | 任意用户 |
 | POST | `/sessions` | 创建 Session（自动成为所有者） | 任意用户 |
-| POST | `/sessions/:id/invite` | 邀请用户加入 | Session 所有者 |
-| POST | `/sessions/:id/join` | 接受邀请加入 Session | 被邀请用户 |
-| GET | `/sessions/:id/participants` | 获取参与者列表 | 参与者 |
-| GET | `/my/shared-sessions` | 获取我参与的所有 Sessions | 当前用户 |
-| POST | `/sessions/:id/messages` | 发送消息 | 参与者 |
-| GET | `/sessions/:id/stream` | SSE 流接收消息 | 参与者 |
+| GET | `/sessions/:id` | 获取会话元数据（不含消息） | 参与者 |
+| GET | `/sessions/:id/messages` | 获取消息历史（从 CLI 存储加载） | 参与者 |
+| POST | `/sessions/:id/messages` | 发送消息（等待完整响应） | 参与者 |
+| GET | `/sessions/:id/stream` | SSE 流式接收消息 | 参与者 |
+| DELETE | `/sessions/:id` | 删除会话 | 参与者 |
 
-### 5.2 请求/响应示例
+### 5.2 查询参数说明
 
-#### 创建 Session
-```bash
-POST /sessions
-Headers: X-User-ID: alice
-Body: { "project": "shared-demo" }
+#### `GET /sessions/:id/messages`
 
-Response: { "sessionId": "xxx" }
-```
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `detailed` | boolean | 返回完整历史（包含 `tool_use`、`tool_result`） |
+| `limit` | number | 限制返回消息数量（返回最新的 N 条） |
 
-#### 邀请参与者
-```bash
-POST /sessions/xxx/invite
-Headers: X-User-ID: alice
-Body: { "userId": "bob" }
-
-Response: { "success": true }
-```
-
-#### 发送消息
-```bash
-POST /sessions/xxx/messages
-Headers: X-User-ID: alice
-Body: { 
-  "message": "你好 Bob！",
-  "from": "alice"  // 标识发送者
+**响应示例（简化模式）**:
+```json
+{
+  "sessionId": "xxx",
+  "source": "cli",
+  "detailed": false,
+  "count": 5,
+  "messages": [
+    {"role": "user", "content": "你好", "timestamp": "..."},
+    {"role": "assistant", "content": "你好！有什么可以帮助你的吗？", "timestamp": "..."}
+  ]
 }
 ```
 
-#### SSE 流
-```bash
-GET /sessions/xxx/stream?userId=alice
-
-// 返回 SSE 流，包含:
-// - type: "text" - Claude 的回复
-// - type: "system" - 系统消息
-// - type: "permission_request" - 工具调用请求
+**响应示例（详细模式）**:
+```json
+{
+  "sessionId": "xxx",
+  "source": "cli",
+  "detailed": true,
+  "count": 8,
+  "messages": [
+    {"type": "user", ...},
+    {"type": "tool_use", "tool_name": "Bash", "tool_input": {...}, ...},
+    {"type": "tool_result", "tool_output": {...}, ...},
+    {"type": "assistant", ...}
+  ]
+}
 ```
 
 ---
 
-## 6. 前端实现
+## 6. 数据来源
+
+### 6.1 Claude CLI 本地存储
+
+Claude CLI 在 `~/.claude/projects/{project-hash}/{sessionId}.jsonl` 中存储完整的对话历史，包括：
+- 用户消息 (`type: "user"`)
+- 助手消息 (`type: "assistant"`)
+- 工具调用 (`type: "tool_use"`)
+- 工具结果 (`type: "tool_result"`)
+- 系统事件 (`type: "system"`)
+
+**本项目以 CLI 本地存储为数据源（Source of Truth）**：
+- `GET /sessions/:id/messages` - 从 CLI jsonl 文件加载历史
+- 支持 `?detailed=true` 获取完整历史（包含工具调用）
+- 支持 `?limit=10` 获取最近的 N 条消息
+
+### 6.2 内存缓存
+
+`ClaudeSession.messages` 数组在会话期间缓存消息，用于：
+- 构建 prompt 上下文
+- 快速访问最近的消息
+- 作为 CLI 文件写入前的临时存储
+
+---
+
+## 7. 前端实现
 
 ### 6.1 Demo 页面
 
