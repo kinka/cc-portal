@@ -523,11 +523,13 @@
 
     async function loadSessionDetails(sessionId) {
       try {
-        const res = await fetch(`${getApiUrl()}/sessions/${sessionId}?userId=${currentUserId}`);
+        // 使用 /sessions/:id/messages 端点加载历史消息
+        const res = await fetch(`${getApiUrl()}/sessions/${sessionId}/messages?userId=${currentUserId}`);
         if (!res.ok) return;
         const data = await res.json();
         messageHistory = data.messages || [];
         renderMessages();
+        log(`加载了 ${messageHistory.length} 条历史消息`, 'success');
       } catch (e) {
         log('加载消息历史失败: ' + e.message, 'error');
       }
