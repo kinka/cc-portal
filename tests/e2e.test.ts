@@ -42,7 +42,7 @@ describe('ClaudeSession.buildPrompt', () => {
     };
     const result = ClaudeSession.buildPrompt('hello', 'bob', ctx);
     expect(result).toContain('[Session Context]');
-    expect(result).toContain('CC-Agents API: http://localhost:3333');
+    expect(result).toContain('CC-Portal API: http://localhost:3333');
     expect(result).toContain('Auth header: X-User-ID: alice');
     expect(result).toContain('Your session ID: sid-123');
     expect(result).toContain('Participants: alice, bob');
@@ -141,7 +141,7 @@ describe('API (no claude)', () => {
   });
 
   test('create session then get session details', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cc-agents-e2e-'));
+    const dir = mkdtempSync(join(tmpdir(), 'cc-portal-e2e-'));
     const app = buildApp();
     await app.listen({ port: 0, host: '127.0.0.1' });
     const port = (app.server!.address() as { port: number }).port;
@@ -190,7 +190,7 @@ describe('API (no claude)', () => {
   });
 
   test('GET /sessions/:id/stream returns SSE', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cc-agents-e2e-'));
+    const dir = mkdtempSync(join(tmpdir(), 'cc-portal-e2e-'));
     const app = buildApp();
     await app.listen({ port: 0, host: '127.0.0.1' });
     const port = (app.server!.address() as { port: number }).port;
@@ -218,7 +218,7 @@ describe('API (no claude)', () => {
   });
 
   test('GET /sessions/:id/pending-permissions returns empty when no pending', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cc-agents-e2e-'));
+    const dir = mkdtempSync(join(tmpdir(), 'cc-portal-e2e-'));
     const app = buildApp();
     await app.listen({ port: 0, host: '127.0.0.1' });
     const port = (app.server!.address() as { port: number }).port;
@@ -243,7 +243,7 @@ describe('API (no claude)', () => {
   });
 
   test('POST /sessions/:id/permissions/:requestId for unknown returns 404', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cc-agents-e2e-'));
+    const dir = mkdtempSync(join(tmpdir(), 'cc-portal-e2e-'));
     const app = buildApp();
     await app.listen({ port: 0, host: '127.0.0.1' });
     const port = (app.server!.address() as { port: number }).port;
@@ -272,7 +272,7 @@ describe('API (no claude)', () => {
   });
 
   test('delete session', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cc-agents-e2e-'));
+    const dir = mkdtempSync(join(tmpdir(), 'cc-portal-e2e-'));
     const app = buildApp();
     await app.listen({ port: 0, host: '127.0.0.1' });
     const port = (app.server!.address() as { port: number }).port;
@@ -303,7 +303,7 @@ describe('API (no claude)', () => {
 
 describe('E2E (real claude)', () => {
   test.skipIf(!runE2E)('create session and single turn message', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cc-agents-e2e-'));
+    const dir = mkdtempSync(join(tmpdir(), 'cc-portal-e2e-'));
     const app = buildApp();
     await app.listen({ port: 0, host: '127.0.0.1' });
     const port = (app.server!.address() as { port: number }).port;
@@ -333,7 +333,7 @@ describe('E2E (real claude)', () => {
   }, 120_000);
 
   test.skipIf(!runE2E)('multi-turn: same session two messages', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cc-agents-e2e-'));
+    const dir = mkdtempSync(join(tmpdir(), 'cc-portal-e2e-'));
     const app = buildApp();
     await app.listen({ port: 0, host: '127.0.0.1' });
     const port = (app.server!.address() as { port: number }).port;
@@ -445,8 +445,8 @@ describe('E2E (real claude)', () => {
   }, 120_000);
 
   test.skipIf(!runE2E)('session auto-resume after server restart', async () => {
-    const dbPath = join(tmpdir(), 'cc-agents-restart-test.db');
-    const dir = mkdtempSync(join(tmpdir(), 'cc-agents-restart-'));
+    const dbPath = join(tmpdir(), 'cc-portal-restart-test.db');
+    const dir = mkdtempSync(join(tmpdir(), 'cc-portal-restart-'));
     const userId = 'restart-test-user';
 
     // First app instance
@@ -546,7 +546,7 @@ describe('User Directory', () => {
         body: JSON.stringify({
           displayName: 'Alice Smith',
           skills: ['typescript', 'rust'],
-          currentProjects: ['cc-agents'],
+          currentProjects: ['cc-portal'],
         }),
       });
 

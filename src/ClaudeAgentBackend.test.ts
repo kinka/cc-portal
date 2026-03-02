@@ -21,8 +21,8 @@ describe('ClaudeAgentBackend', () => {
     });
 
     test('should handle nested paths', () => {
-      const result = (ClaudeAgentBackend as any).calculateProjectHash('/Users/kinka/space/happy-coder/cc-agents');
-      expect(result).toBe('-Users-kinka-space-happy-coder-cc-agents');
+      const result = (ClaudeAgentBackend as any).calculateProjectHash('/Users/kinka/space/happy-coder/cc-portal');
+      expect(result).toBe('-Users-kinka-space-happy-coder-cc-portal');
     });
   });
 

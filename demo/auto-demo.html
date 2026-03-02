@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CC-Agents Auto Demo</title>
+  <title>CC-Portal Auto Demo</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -231,7 +231,7 @@
 <body>
   <div class="container">
     <header>
-      <h1>🤖 CC-Agents Auto Demo</h1>
+      <h1>🤖 CC-Portal Auto Demo</h1>
       <p class="subtitle">// Agent-to-Agent Cross-Session Communication</p>
     </header>
 
@@ -415,8 +415,8 @@
 
     async function step3_setupProfiles() {
       addLog('Setting up user profiles...', 'info');
-      await apiRequest('PUT', '/me/profile', { displayName: 'Alice (Developer)', skills: ['typescript', 'rust'], currentProjects: ['cc-agents'] }, 'user-a');
-      await apiRequest('PUT', '/me/profile', { displayName: 'Bob (Designer)', skills: ['figma', 'ui/ux'], currentProjects: ['cc-agents'] }, 'user-b');
+      await apiRequest('PUT', '/me/profile', { displayName: 'Alice (Developer)', skills: ['typescript', 'rust'], currentProjects: ['cc-portal'] }, 'user-a');
+      await apiRequest('PUT', '/me/profile', { displayName: 'Bob (Designer)', skills: ['figma', 'ui/ux'], currentProjects: ['cc-portal'] }, 'user-b');
       addLog('✓ Profiles configured', 'success');
       addTimelineEvent('A', 'PROFILE', 'Updated profile with skills');
       addTimelineEvent('B', 'PROFILE', 'Updated profile with skills');

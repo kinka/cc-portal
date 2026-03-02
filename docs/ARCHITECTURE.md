@@ -1,4 +1,4 @@
-# CC-Agents 共享 Session（群聊模式）架构文档
+# CC-Portal 共享 Session（群聊模式）架构文档
 
 ## 1. 架构概述
 

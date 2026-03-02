@@ -66,7 +66,7 @@
 ## 安装
 
 ```bash
-cd /Users/kinka/space/happy-coder/cc-agents
+cd /Users/kinka/space/happy-coder/cc-portal
 bun install
 ```
 
@@ -203,7 +203,7 @@ Header: X-User-ID: your-user-id
   "userId": "alice",
   "displayName": "Alice Smith",
   "skills": ["typescript", "rust"],
-  "currentProjects": ["cc-agents"]
+  "currentProjects": ["cc-portal"]
 }
 ```
 
@@ -216,7 +216,7 @@ Content-Type: application/json
 {
   "displayName": "Alice Smith",
   "skills": ["typescript", "rust"],
-  "currentProjects": ["cc-agents"]
+  "currentProjects": ["cc-portal"]
 }
 
 # 返回更新后的 Profile
@@ -376,7 +376,7 @@ session.destroy();
 
 ```
 [Session Context]
-CC-Agents API: http://localhost:3333
+CC-Portal API: http://localhost:3333
 Auth header: X-User-ID: alice
 Your session ID: xxx-xxx
 
@@ -417,7 +417,7 @@ Current speaker: alice
 ## 项目结构
 
 ```
-cc-agents/
+cc-portal/
 ├── src/
 │   ├── app.ts                   # Fastify 应用构建（buildApp，供测试注入）
 │   ├── index.ts                 # HTTP 服务入口

@@ -1,6 +1,6 @@
 # 与 happy-cli 对齐改造成果
 
-本文档记录 cc-agents 与 happy-cli 在 Claude Agent SDK 层面的对齐改造。
+本文档记录 cc-portal 与 happy-cli 在 Claude Agent SDK 层面的对齐改造。
 
 ## 改造时间
 

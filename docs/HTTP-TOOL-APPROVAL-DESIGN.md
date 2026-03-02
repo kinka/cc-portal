@@ -1,6 +1,6 @@
 # HTTP 工具审批功能设计
 
-当通过 HTTP 使用 cc-agents 且 `permissionMode` 不为 `bypassPermissions` 时，无法传入 `canCallTool` 回调。本设计通过「待审批队列 + 审批接口」让前端/客户端在收到工具请求后，通过 HTTP 批准或拒绝。
+当通过 HTTP 使用 cc-portal 且 `permissionMode` 不为 `bypassPermissions` 时，无法传入 `canCallTool` 回调。本设计通过「待审批队列 + 审批接口」让前端/客户端在收到工具请求后，通过 HTTP 批准或拒绝。
 
 ---
 

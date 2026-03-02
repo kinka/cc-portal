@@ -218,7 +218,7 @@ export class ClaudeSession extends EventEmitter {
     if (isMultiUser) {
       const lines = [
         '[Session Context]',
-        `CC-Agents API: ${context.apiBaseUrl}`,
+        `CC-Portal API: ${context.apiBaseUrl}`,
         `Auth header: X-User-ID: ${context.userId}`,
         `Your session ID: ${context.sessionId}`,
         '',

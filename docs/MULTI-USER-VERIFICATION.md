@@ -5,7 +5,7 @@
 本文档描述如何验证以下能力：
 
 1. **多用户感知**：Claude 在多用户 session 中能识别当前发言者、所有参与者、及 session 归属
-2. **Agent 发现**：Claude 在 prompt 中收到 CC-Agents API 地址和认证信息，可通过内置工具自主调用
+2. **Agent 发现**：Claude 在 prompt 中收到 CC-Portal API 地址和认证信息，可通过内置工具自主调用
 
 ---
 
@@ -119,7 +119,7 @@ Claude 实际接收到的 prompt（非用户可见）：
 
 ```
 [Session Context]
-CC-Agents API: http://localhost:3334
+CC-Portal API: http://localhost:3334
 Auth header: X-User-ID: alice
 Your session ID: c9f9d682-b020-422a-8c8f-941623219051
 

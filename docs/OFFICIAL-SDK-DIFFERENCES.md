@@ -1,12 +1,12 @@
-# cc-agents 与官方 Claude Agent SDK 的差异
+# cc-portal 与官方 Claude Agent SDK 的差异
 
-本文档对比 **cc-agents** 与 Anthropic 官方 **Claude Agent SDK**（[@anthropic-ai/claude-agent-sdk](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk) / [platform.claude.com Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview)）的差异。
+本文档对比 **cc-portal** 与 Anthropic 官方 **Claude Agent SDK**（[@anthropic-ai/claude-agent-sdk](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk) / [platform.claude.com Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview)）的差异。
 
 ---
 
 ## 1. 架构与运行方式
 
-| 维度 | 官方 Agent SDK | cc-agents |
+| 维度 | 官方 Agent SDK | cc-portal |
 |------|----------------|-----------|
 | **形态** | npm 库，直接依赖、在进程内运行 | HTTP 服务 + 子进程 |
 | **与 Claude 的通信** | 调用 Anthropic API（Messages API + 内置 agent 循环） | **spawn `claude` CLI**，通过 stdin/stdout 传 **stream-json**（换行分隔 JSON） |
@@ -28,7 +28,7 @@
    - 重复直到 API 返回的 `stop_reason` 不再是 `tool_use`，然后给你 `ResultMessage`。
 3. **内置工具都在本进程**：Read / Write / Edit / Bash / Glob / Grep 等由 SDK 用 Node/Python 的 fs、child_process 等实现，不依赖外部 CLI。只有 MCP 等会再起子进程跑独立 server。
 
-所以「无子进程」指的是：**没有 `claude` 这个子进程**；只有你的应用进程 + 对 Anthropic API 的 HTTP 调用 + 库内实现的工具执行。和 cc-agents（必须 spawn 一个 `claude` 进程、用 stdin/stdout 传 stream-json）是两条完全不同的实现路径。
+所以「无子进程」指的是：**没有 `claude` 这个子进程**；只有你的应用进程 + 对 Anthropic API 的 HTTP 调用 + 库内实现的工具执行。和 cc-portal（必须 spawn 一个 `claude` 进程、用 stdin/stdout 传 stream-json）是两条完全不同的实现路径。
 
 ### 实际表现：官方 SDK 与 CLI 行为不完全一致
 
@@ -37,13 +37,13 @@
 - **MCP 服务**：SDK 里 MCP 的加载/生命周期和 CLI 不同，容易出现加载不到、连接不稳等问题；
 - 其他依赖 CLI 行为（配置、hooks、环境）的能力，在 SDK 里可能缺失或表现不一致。
 
-**cc-agents 走的是 CLI**：spawn 的就是桌面/无头用的同一个 `claude`，所以 MCP、权限、stream-json 等行为与「直接跑 claude」一致，更适合「我要和 Claude Code 行为完全对齐」的场景。代价是多一个子进程和 stream-json 的解析，而不是用官方 SDK 的库 API。
+**cc-portal 走的是 CLI**：spawn 的就是桌面/无头用的同一个 `claude`，所以 MCP、权限、stream-json 等行为与「直接跑 claude」一致，更适合「我要和 Claude Code 行为完全对齐」的场景。代价是多一个子进程和 stream-json 的解析，而不是用官方 SDK 的库 API。
 
 ---
 
 ## 2. 消息与流式格式
 
-| 维度 | 官方 Agent SDK | cc-agents |
+| 维度 | 官方 Agent SDK | cc-portal |
 |------|----------------|-----------|
 | **消息来源** | 库内部产生的结构化消息对象 | CLI 标准输出的一行一个 JSON（stream-json 协议） |
 | **常见类型** | `SystemMessage`、`AssistantMessage`、`ResultMessage`、`StreamEvent`（`includePartialMessages` 时） | `system`、`user`、`assistant`、`result`、`log`、`control_request`、`control_response` |
@@ -56,7 +56,7 @@
 
 ## 3. 能力对比
 
-| 能力 | 官方 Agent SDK | cc-agents |
+| 能力 | 官方 Agent SDK | cc-portal |
 |------|----------------|-----------|
 | **权限模式** | `permissionMode`（default / acceptEdits / bypassPermissions / plan） | ✅ 已对齐（同上 + `--permission-mode` 传给 CLI） |
 | **工具审批** | 通过 [Handle approvals and user input](https://platform.claude.com/docs/en/agent-sdk/user-input) 等交互式审批 | ✅ `canCallTool` 回调 + control_request/control_response（仅程序化；HTTP 下不可用） |
@@ -74,7 +74,7 @@
 
 ## 4. API 形态
 
-| 维度 | 官方 Agent SDK | cc-agents |
+| 维度 | 官方 Agent SDK | cc-portal |
 |------|----------------|-----------|
 | **调用方式** | `query({ prompt, options })` 返回 AsyncIterable\<Message\> | HTTP：POST /sessions、POST /sessions/:id/messages、GET /sessions/:id/stream（SSE） |
 | **多轮** | 每次 `query(...)` 可带 `resume: sessionId`，由库管理会话 | 创建 Session 后多次 POST messages 或 GET stream，同一 session 对应同一子进程 |
@@ -84,7 +84,7 @@
 
 ## 5. 总结表
 
-| 项目 | 官方 Agent SDK | cc-agents |
+| 项目 | 官方 Agent SDK | cc-portal |
 |------|----------------|-----------|
 | **定位** | 库：嵌入应用、直连 API、完整 SDK 能力 | 服务：包装 CLI、HTTP/SSE、进程复用多轮 |
 | **协议/传输** | Anthropic API（含 stream_event 等） | Claude Code CLI stream-json（stdin/stdout） |
@@ -95,4 +95,4 @@
 | **Session** | resume + session_id | 一 session 一进程，无需 resume |
 | **canCallTool 在 HTTP 下** | N/A（库内直接回调） | ❌ 无法传回调，需 bypass 或后续做审批 API |
 
-若要「与官方 SDK 行为更一致」且仍用 cc-agents 架构，可考虑的方向：在现有 stream 上暴露更细粒度事件（若 CLI 支持）、或增加 Hooks/Subagents 的配置透传（若 CLI 支持）；若要完整 StreamEvent + Hooks + Subagents，需改用官方 `@anthropic-ai/claude-agent-sdk` 或在其之上再包一层 HTTP。
+若要「与官方 SDK 行为更一致」且仍用 cc-portal 架构，可考虑的方向：在现有 stream 上暴露更细粒度事件（若 CLI 支持）、或增加 Hooks/Subagents 的配置透传（若 CLI 支持）；若要完整 StreamEvent + Hooks + Subagents，需改用官方 `@anthropic-ai/claude-agent-sdk` 或在其之上再包一层 HTTP。
