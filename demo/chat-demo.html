@@ -363,25 +363,25 @@
 <div class="container">
   <header>
     <h1>CC-Agents Chat Demo</h1>
-    <p class="subtitle">Alice 在自己的 Session 工作，需要协助时直接给 Bob 创建独立 Session 委派任务，Bob 完成后写回 Alice</p>
+    <p class="subtitle">Alice 输入 "+Bob 任务描述" 即可委派任务给 Bob，Bob 在独立 Session 中处理并写回结果</p>
   </header>
 
   <div class="flow-card">
     <div class="flow-step">
       <span class="num">1</span>
-      Alice 创建自己的 Session
+      Alice 点击「开始演示」创建 Session
     </div>
     <div class="flow-step">
       <span class="num">2</span>
-      Alice 委派任务 → <code>POST /sessions { ownerId:"bob" }</code>
+      Alice 输入 <code>+Bob 查下深圳的天气预报</code>
     </div>
     <div class="flow-step">
       <span class="num">3</span>
-      Bob 独立 Session 激活，收到任务上下文
+      Bob 界面激活，收到任务上下文
     </div>
     <div class="flow-step">
       <span class="num">4</span>
-      Bob 完成后写回 → <code>POST /sessions/:alice-id/messages</code>
+      Bob 处理任务并写回 → <code>POST /sessions/:alice-id/messages</code>
     </div>
   </div>
 
@@ -636,10 +636,25 @@
     if (!sessionId) return;
 
     const input = document.getElementById(user + '-input');
-    const message = input.value.trim();
+    let message = input.value.trim();
     if (!message) return;
     if (user === 'alice' && aliceSending) return;
     if (user === 'bob'   && bobSending)   return;
+
+    // Check for "+Bob" pattern in Alice's message (e.g., "+Bob 查下深圳的天气预报")
+    if (user === 'alice' && !bobSessionId) {
+      const match = message.match(/^\+Bob\s*(.*)/);
+      if (match) {
+        input.value = '';
+        // Extract task description after "+Bob"
+        const taskContext = match[1] || '请协助分析并完成一项任务。';
+        // Send the message to Alice's session first
+        appendBubble('alice', 'alice', message, true);
+        // Then delegate to Bob
+        await delegateToBob(taskContext);
+        return;
+      }
+    }
 
     input.value = '';
     if (user === 'alice') aliceSending = true; else bobSending = true;
@@ -660,30 +675,29 @@
 
   // ── Delegate to Bob ───────────────────────────────────────────────────────
 
-  async function delegateToBob() {
+  async function delegateToBob(taskContext) {
     if (!aliceSessionId || bobSessionId) return;
 
     document.getElementById('btn-delegate').disabled = true;
     setStatus('alice', '委派任务给 Bob...');
 
-    // Generate task content (use alice's last message as context, or a default)
-    const messages = document.querySelectorAll('#alice-messages .bubble:not(.sys-msg)');
-    let taskContext = '请协助分析并完成一项任务。';
-    if (messages.length > 0) {
-      taskContext = messages[messages.length - 1].textContent.trim().slice(0, 200);
+    // Use provided context or get from last message
+    if (!taskContext) {
+      const messages = document.querySelectorAll('#alice-messages .bubble:not(.sys-msg)');
+      taskContext = messages.length > 0 ? messages[messages.length - 1].textContent.trim().slice(0, 200) : '请协助分析并完成一项任务。';
     }
 
     const taskMsg = `[来自 Alice 的委派任务]\n${taskContext}\n\n请完成后将结果告知 Alice。`;
 
-    // Create Bob's independent session (owned by bob, initiated by alice)
+    // Step 1: Create Bob's independent session (owned by bob, initiated by alice)
     const createR = await req('POST', '/sessions', {
       ownerId: 'bob',
       project: 'delegated-task',
-      initialMessage: taskMsg,
+      bypassPermission: true,
     }, 'alice');
 
     if (!createR.ok) {
-      sysMsg('alice', '❌ 委派失败: ' + JSON.stringify(createR.data));
+      sysMsg('alice', '❌ 委派失败：' + JSON.stringify(createR.data));
       document.getElementById('btn-delegate').disabled = false;
       setStatus('alice', '在线');
       return;
@@ -691,34 +705,72 @@
 
     bobSessionId = createR.data.sessionId;
     sysMsg('alice', `✅ 已委派任务给 Bob (session: ${bobSessionId.slice(0,8)}...)`);
-    setStatus('alice', '在线');
 
-    // Add Bob as participant in Alice's session so he can write back
+    // Step 2: Add Bob as participant in Alice's session so he can write back
     await req('POST', `/sessions/${aliceSessionId}/participants`, { userId: 'bob' }, 'alice');
 
-    // Activate Bob's panel
+    // Step 3: Activate Bob's panel
     document.getElementById('bob-placeholder').style.display = 'none';
     document.getElementById('bob-messages').style.display = 'flex';
     document.getElementById('bob-input-area').style.display = 'flex';
     document.getElementById('bob-panel').classList.add('active');
     document.getElementById('bob-role').textContent = 'delegated session';
-    document.getElementById('writeback-area').style.display = 'flex';
+    document.getElementById('writeback-area').style.display = 'none'; // Auto writeback
 
-    setStatus('bob', '收到任务，处理中...');
+    setStatus('bob', '收到任务，Claude 处理中...');
 
-    // Show task in Bob's panel and stream initial response
-    enableInput('bob', false);
+    // Step 4: Show task context in Bob's panel and stream to Bob's session
+    appendBubble('bob', 'alice', taskMsg, false);
+    sysMsg('bob', 'Claude 正在处理任务...');
+
+    // Step 5: Stream the task to Bob's session and get Claude's response
     try {
-      await streamMessage(bobSessionId, 'bob', taskMsg, 'bob', 'alice');
-      setStatus('bob', '在线 — 可回复或写回 Alice');
-      enableInput('bob', true);
+      await streamMessage(bobSessionId, 'bob', taskMsg, 'bob', 'bob');
+      sysMsg('bob', '✅ Claude 已完成任务');
+      setStatus('bob', '任务完成');
+
+      // Step 6: Auto-get the result and write back to Alice
+      await sleep(500);
+      const bobMessages = document.querySelectorAll('#bob-messages .bubble:not(.sys-msg)');
+      if (bobMessages.length > 0) {
+        const lastMsg = bobMessages[bobMessages.length - 1].textContent.trim();
+        await autoWriteBackToAlice(lastMsg);
+      }
     } catch (e) {
-      setStatus('bob', '会话错误');
-      enableInput('bob', true);
+      sysMsg('bob', '⚠️ 处理失败：' + e.message);
+      setStatus('bob', '处理失败');
+    }
+
+    setStatus('alice', '收到 Bob 的回复');
+  }
+
+  // ── Auto write back to Alice (no manual action needed) ──────────────────────
+
+  async function autoWriteBackToAlice(message) {
+    if (!aliceSessionId || !bobSessionId) return;
+
+    setStatus('bob', '写回给 Alice...');
+
+    const r = await req('POST', `/sessions/${aliceSessionId}/messages`, {
+      message: message,
+      from: 'bob',
+    }, 'bob');
+
+    if (r.ok) {
+      sysMsg('bob', `✅ 已自动写回 Alice`);
+      appendBubble('alice', 'bob', message, false);
+      if (r.data.response) {
+        appendBubble('alice', 'claude', r.data.response, false);
+      }
+      setStatus('bob', '写回完成');
+      setStatus('alice', '收到 Bob 的回复');
+    } else {
+      sysMsg('bob', '❌ 写回失败：' + JSON.stringify(r.data));
+      setStatus('bob', '写回失败');
     }
   }
 
-  // ── Bob writes back to Alice ───────────────────────────────────────────────
+  // ── Manual Bob writes back to Alice (for demo purposes) ───────────────────────
 
   async function writeBackToAlice() {
     if (!aliceSessionId || !bobSessionId) return;
@@ -730,7 +782,6 @@
     input.disabled = true;
     setStatus('bob', '写回给 Alice...');
 
-    // Bob posts to Alice's session (Bob is now a participant)
     const r = await req('POST', `/sessions/${aliceSessionId}/messages`, {
       message: message,
       from: 'bob',
@@ -738,7 +789,6 @@
 
     if (r.ok) {
       sysMsg('bob', `✅ 已写回 Alice: "${message.slice(0, 50)}${message.length > 50 ? '...' : ''}"`);
-      // Show in Alice's panel as a message from Bob
       appendBubble('alice', 'bob', message, false);
       if (r.data.response) {
         appendBubble('alice', 'claude', r.data.response, false);
@@ -747,7 +797,7 @@
       setStatus('bob', '写回完成');
       setStatus('alice', '收到 Bob 的写回');
     } else {
-      sysMsg('bob', '❌ 写回失败: ' + JSON.stringify(r.data));
+      sysMsg('bob', '❌ 写回失败：' + JSON.stringify(r.data));
       setStatus('bob', '写回失败');
     }
 
@@ -759,27 +809,45 @@
   async function startScene() {
     document.getElementById('btn-start').disabled = true;
 
-    const r = await req('POST', '/sessions', { project: 'alice-workspace' }, 'alice');
+    // Step 1: Create Alice's session
+    const r = await req('POST', '/sessions', {
+      ownerId: 'alice',
+      project: 'alice-workspace',
+      bypassPermission: true
+    }, 'alice');
+
     if (!r.ok) {
-      alert('创建失败: ' + JSON.stringify(r.data));
+      alert('创建失败：' + JSON.stringify(r.data));
       document.getElementById('btn-start').disabled = false;
       return;
     }
 
     aliceSessionId = r.data.sessionId;
     document.getElementById('alice-messages').innerHTML = '';
-    sysMsg('alice', `✅ Session 已创建: ${aliceSessionId.slice(0,8)}...`);
+    sysMsg('alice', `✅ Session 已创建：${aliceSessionId.slice(0,8)}...`);
 
     setStatus('alice', '发送初始消息...');
+    enableInput('alice', false);
 
-    const initMsg = '让Bob帮忙查询下深圳今天的天气';
+    // Step 2: Automatically send the initial delegation message
+    await sleep(800);
+
+    const initialMessage = '+Bob 查下深圳的天气预报';
+    appendBubble('alice', 'alice', initialMessage, true);
+    sysMsg('alice', '📤 已发送委派消息，等待 Claude 处理...');
+
+    // Stream the message to get Claude's response
     try {
-      await streamMessage(aliceSessionId, 'alice', initMsg, 'alice', 'alice');
-    } catch (_) {}
+      await streamMessage(aliceSessionId, 'alice', initialMessage, 'alice', 'alice');
+      sysMsg('alice', '💡 委派任务处理中...');
+    } catch (e) {
+      sysMsg('alice', '⚠️ 发送消息失败：' + e.message);
+    }
 
-    setStatus('alice', '在线');
+    // Step 3: Delegate to Bob
+    await delegateToBob('查下深圳的天气预报');
+
     enableInput('alice', true);
-    document.getElementById('btn-delegate').disabled = false;
     document.getElementById('alice-input').focus();
   }
 
