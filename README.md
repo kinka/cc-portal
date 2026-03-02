@@ -1,6 +1,8 @@
-# Claude Agent HTTP Service
+# ClaudePortal
 
-基于 Bun 开发的 HTTP 服务，使用 happy-cli 的 Claude SDK 封装，可以远程启动 Claude Code CLI 并进行持续的对话。
+将 Claude Code CLI 封装为 HTTP 服务，提供有状态的会话管理。基于 Bun 开发，支持持久对话、多用户协作。
+
+**核心特点**：像调用大模型 API 一样简单，但自动保持对话上下文，无需每次传递历史消息。
 
 ## 功能特性
 

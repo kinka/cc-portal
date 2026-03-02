@@ -4,7 +4,11 @@ dist/
 *.log
 .claude
 
-
+# User data directories
 data/
 test-users/
 users/
+memory/
+
+# Development files
+todo.md

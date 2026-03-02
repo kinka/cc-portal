@@ -1,8 +1,18 @@
 {
-  "name": "cc-agents",
+  "name": "claude-portal",
   "version": "0.1.0",
   "description": "HTTP service for remote Claude Code CLI control with persistent conversations",
+  "license": "MIT",
   "type": "module",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "anthropic",
+    "agent",
+    "http-api",
+    "bun",
+    "fastify"
+  ],
   "scripts": {
     "start": "bun src/index.ts",
     "dev": "bun --watch src/index.ts",
