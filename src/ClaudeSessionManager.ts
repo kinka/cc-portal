@@ -4,7 +4,6 @@ import { resolve, normalize, isAbsolute } from 'node:path';
 import { ClaudeSession } from './ClaudeSession';
 import { createLogger } from './logger';
 import type { DatabaseManager } from './db';
-import { UserMemoryInitializer } from './UserMemoryInitializer';
 
 const log = createLogger({ module: 'SessionManager' });
 
@@ -51,7 +50,6 @@ export class ClaudeSessionManager {
   private usersDir: string;
   private agentApiBaseUrl?: string;
   private sessionLoadingLocks = new Map<string, Promise<ClaudeSession | undefined>>();
-  private memoryInitializer: UserMemoryInitializer;
 
   constructor(
     private db: DatabaseManager,
@@ -59,7 +57,6 @@ export class ClaudeSessionManager {
   ) {
     this.usersDir = resolve(options.usersDir || process.env.USERS_DIR || './users');
     this.agentApiBaseUrl = options.agentApiBaseUrl;
-    this.memoryInitializer = new UserMemoryInitializer({ usersDir: this.usersDir });
     this.loadActiveSessionsFromDb();
   }
 
@@ -90,9 +87,6 @@ export class ClaudeSessionManager {
       await mkdir(targetPath, { recursive: true });
       return targetPath;
     }
-
-    // 自动初始化用户记忆系统（会创建用户目录和 CLAUDE.md、kernel.md）
-    await this.memoryInitializer.ensureUserMemory(ownerId);
 
     const userDir = resolve(this.usersDir, ownerId);
     let targetPath: string;

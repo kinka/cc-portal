@@ -1,6 +1,3 @@
-import { MemoryManager } from './memory/MemoryManager';
-import { registerMemoryRoutes } from './routes/memoryRoutes';
-
 import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyReply } from 'fastify';
 import { realpathSync } from 'node:fs';
 import { ClaudeSessionManager } from './ClaudeSessionManager';
@@ -15,8 +12,6 @@ import { registerParticipantRoutes } from './routes/participantRoutes';
 interface BuildAppOptions {
   sessionManager?: ClaudeSessionManager;
   db?: DatabaseManager;
-  /** Memory manager for long-term user memory */
-  memoryManager?: MemoryManager;
 }
 
 export function buildApp(options?: BuildAppOptions): FastifyInstance {
@@ -28,9 +23,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
   const db = options.db;
 
   const userDirectory = new UserDirectory();
-  
-  // Memory manager for long-term user memory
-  const memoryManager = options.memoryManager ?? new MemoryManager('./memory');
+
   const fastify = Fastify({
     logger: {
       level: process.env.LOG_LEVEL || (isDev ? 'debug' : 'info'),
@@ -76,11 +69,6 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
   // Register participant routes
   if (db) {
     registerParticipantRoutes(fastify, db, manager ?? undefined);
-  }
-
-  // Register memory routes
-  if (db) {
-    registerMemoryRoutes(fastify, memoryManager);
   }
 
   fastify.get('/health', async () => {
