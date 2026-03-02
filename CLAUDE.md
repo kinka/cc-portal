@@ -49,22 +49,6 @@ This is a Bun-based HTTP service that provides remote control of Claude Code CLI
 - Implements control protocol for tool approval
 - Extends EventEmitter for `permissionRequest` events
 
-TW|**Long-Term Memory (`users/{userId}/` - Zero-Dependency, Auto-Managed)**
-XS|- Each user has `users/{userId}/CLAUDE.md` guiding memory management
-XN|- Claude CLI auto-reads `CLAUDE.md` and `kernel.md` on startup
-BJ|- `CLAUDE.md` instructs Claude to use native tools (Read/Edit/Write) for memory
-QP|- No MCP Server needed - pure prompt engineering
-WH|- Conversations automatically summarized via Claude's native Write tool
-XS|- Each user has `users/{userId}/CLAUDE.md` guiding memory management
-XN|- Claude CLI auto-reads `CLAUDE.md` and `kernel.md` on startup
-BJ|- `CLAUDE.md` instructs Claude to actively identify and record memories
-QP|- MCP `memory-server` provides tools: read_kernel, update_kernel_section, etc.
-WH|- Conversations automatically summarized via append_conversation_summary
-XS|- Each user has an independent kernel file: `memory/{userId}/kernel.md`
-XN|- Claude actively manages user memories (habits, preferences, skills)
-BJ|- System prompt injection with user kernel for personalized responses
-QP|- API endpoints: `/users/:userId/kernel`, `/sessions/:id/summarize`
-WH|
 **HTTP Tool Approval Flow**
 - When `permissionMode` is not `bypassPermissions` and no `canCallTool` callback provided, tool calls enter pending queue
 - Client receives `permission_request` chunk in SSE stream
@@ -83,3 +67,11 @@ WH|
 - Bun runtime
 - `@anthropic-ai/claude-code` CLI installed and authenticated
 - Valid Claude API key in environment
+
+### Auto Memory
+
+本项目已启用 Claude Code Auto Memory 功能：
+- **存储位置**: `~/.claude/projects/-Users-kinka-space-happy-coder-cc-portal/memory/`
+- **MEMORY.md**: 前 200 行每 session 自动加载
+- **主题文件**: Claude 按需读取详细笔记（如 debugging.md, patterns.md 等）
+- **命令**: 使用 `/memory` 查看和管理记忆
