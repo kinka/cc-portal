@@ -356,7 +356,8 @@ export class ClaudeAgentBackend extends EventEmitter {
     ];
 
     if (this.permissionMode) args.push('--permission-mode', this.permissionMode);
-    if (this.model) args.push('--model', this.model);
+    // 默认使用 qwen3.5-plus 模型
+    args.push('--model', this.model || 'qwen3.5-plus');
     if (this.allowedTools?.length) args.push('--allowedTools', this.allowedTools.join(','));
     if (this.disallowedTools?.length) args.push('--disallowedTools', this.disallowedTools.join(','));
     if (this.maxTurns != null) args.push('--max-turns', String(this.maxTurns));
