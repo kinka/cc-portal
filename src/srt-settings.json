@@ -1,0 +1,14 @@
+{
+  "network": {
+    "allowedDomains": [
+        "coding.dashscope.aliyuncs.com",
+        "*.example.com"
+    ],
+    "deniedDomains": []
+  },
+  "filesystem": {
+    "denyRead": ["~/.ssh"],
+    "allowWrite": [".", "~/.claude", "~/.claude.json"],
+    "denyWrite": []
+  }
+}

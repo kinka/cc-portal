@@ -3,6 +3,7 @@
 - [ ] 增加终止请求的功能
 - [ ] 增加跨session交互的功能, 可以 +user-a +user-b 进行双向沟通
 - [ ] session context 需要一个区分度更高的标识
+- [ ] 可以直接在srt下调用claude， 运行在沙箱环境中， 也可以在users目录设定全局的CLAUDE.md 文件，定义基本功能
 
 ## 功能增强
 

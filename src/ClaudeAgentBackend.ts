@@ -347,6 +347,8 @@ export class ClaudeAgentBackend extends EventEmitter {
       this.readLoopStarted = false;
     }
 
+    const useSrt = true;
+    const cmd = useSrt ? 'srt' : 'claude';
     const args = [
       '--output-format',
       'stream-json',
@@ -354,6 +356,12 @@ export class ClaudeAgentBackend extends EventEmitter {
       'stream-json',
       '--verbose',
     ];
+    if (useSrt) {
+      // Resolve to absolute path so the child process finds it regardless of cwd (session dir)
+      const settingsPath = join(import.meta.dirname, 'srt-settings.json');
+      args.unshift('--settings', settingsPath);
+      args.unshift('claude');
+    }
 
     if (this.permissionMode) args.push('--permission-mode', this.permissionMode);
     // 默认使用 qwen3.5-plus 模型
@@ -371,8 +379,8 @@ export class ClaudeAgentBackend extends EventEmitter {
     args.push(sessionFlag, this.claudeSessionId);
     this.killExistingProcessForSession();
       await new Promise(resolve => setTimeout(resolve, 500));
-    log.info({ args: args.slice(0, 8), sessionFlag }, 'Initializing Claude process');
-      this.child = spawn('claude', args, {
+    log.info({cmd, args: args.slice(0, 8), sessionFlag }, 'Initializing Claude process');
+      this.child = spawn(cmd, args, {
       cwd: this.cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: process.env,
@@ -395,17 +403,22 @@ export class ClaudeAgentBackend extends EventEmitter {
     });
 
     await new Promise(resolve => setTimeout(resolve, 1000));
-      if (!this.child.killed && this.child.exitCode === null) {
+    if (!this.child.killed && this.child.exitCode === null) {
       this.isInitialized = true;
       this.startReadLoop();
       return;
     }
-      const exitCode = this.child?.exitCode;
+    const exitCode = this.child?.exitCode;
     const errorMatch = stderrBuffer.match(/Error:\s*(.+)/);
-    const errorMsg = errorMatch ? errorMatch[1].trim() : `Process exited with code ${exitCode}`;
+    let errorMsg = errorMatch ? errorMatch[1].trim() : `Process exited with code ${exitCode}`;
+    if (stderrBuffer.trim()) {
+      const stderrSnippet = stderrBuffer.trim().slice(-500);
+      if (!errorMatch) errorMsg += `. stderr: ${stderrSnippet}`;
+      else log.debug({ stderr: stderrBuffer }, 'Claude process stderr');
+    }
     this.rl?.close();
     this.child = undefined;
-      this.rl = undefined;
+    this.rl = undefined;
     throw new Error(`Failed to start Claude: ${errorMsg}`);
   }
 
@@ -443,7 +456,9 @@ export class ClaudeAgentBackend extends EventEmitter {
         } else if (msg.type === 'result') {
           const resultMsg = msg as SDKResultMessage;
           if (resultMsg.is_error) {
-            throw new Error(`Claude error: ${resultMsg.result ?? 'Unknown error'}`);
+            const errText = ClaudeAgentBackend.formatResultError(resultMsg);
+            log.warn({ resultMsg }, 'Claude returned error result');
+            throw new Error(`Claude error: ${errText}`);
           }
           return (fullText.trim() || resultMsg.result) ?? '';
         }
@@ -548,7 +563,9 @@ export class ClaudeAgentBackend extends EventEmitter {
         } else if (msg.type === 'result') {
           const resultMsg = msg as SDKResultMessage;
           if (resultMsg.is_error) {
-            yield { type: 'error', error: resultMsg.result ?? 'Unknown error' };
+            const errText = ClaudeAgentBackend.formatResultError(resultMsg);
+            log.warn({ resultMsg }, 'Claude returned error result');
+            yield { type: 'error', error: errText };
           }
           yield { type: 'done' };
           return;
@@ -557,6 +574,25 @@ export class ClaudeAgentBackend extends EventEmitter {
     } finally {
       this.releaseConsumerLock();
     }
+  }
+
+  /**
+   * Build a readable error string from a failed result message (when result is often empty).
+   * Prefers result, then resultMsg.errors[] from CLI, then subtype.
+   */
+  private static formatResultError(resultMsg: SDKResultMessage): string {
+    if (resultMsg.result && String(resultMsg.result).trim()) {
+      return String(resultMsg.result).trim();
+    }
+    const errors = resultMsg.errors;
+    if (Array.isArray(errors) && errors.length > 0 && errors[0]) {
+      return errors.join('; ');
+    }
+    const subtype = resultMsg.subtype;
+    if (subtype === 'error_max_turns') return 'Max turns reached';
+    if (subtype === 'error_during_execution') return 'Error during execution';
+    if (subtype) return `Error (${subtype})`;
+    return 'Unknown error';
   }
 
   /**
@@ -589,9 +625,9 @@ export class ClaudeAgentBackend extends EventEmitter {
       const projectDir = join(projectsDir, projectHash);
       const sessionFile = join(projectDir, `${this.claudeSessionId}.jsonl`);
 
-      // Check if file exists
+      // File is created by the CLI when the first message is sent; missing file is normal for new sessions
       if (!existsSync(sessionFile)) {
-        log.debug({ sessionFile, sessionId: this.claudeSessionId }, 'Session file not found');
+        log.debug({ sessionId: this.claudeSessionId }, 'No CLI history yet (expected for new session)');
         return [];
       }
 
@@ -653,9 +689,9 @@ export class ClaudeAgentBackend extends EventEmitter {
       const projectDir = join(projectsDir, projectHash);
       const sessionFile = join(projectDir, `${this.claudeSessionId}.jsonl`);
 
-      // Check if file exists
+      // File is created by the CLI when the first message is sent; missing file is normal for new sessions
       if (!existsSync(sessionFile)) {
-        log.debug({ sessionFile, sessionId: this.claudeSessionId }, 'Session file not found');
+        log.debug({ sessionId: this.claudeSessionId }, 'No CLI history yet (expected for new session)');
         return [];
       }
 

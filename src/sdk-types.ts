@@ -57,6 +57,8 @@ export interface SDKResultMessage extends SDKMessage {
   type: 'result';
   subtype: 'success' | 'error_max_turns' | 'error_during_execution';
   result?: string;
+  /** Error details from CLI (e.g. "No conversation found with session ID: ...") */
+  errors?: string[];
   num_turns: number;
   session_id: string;
   is_error: boolean;
