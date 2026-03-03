@@ -8,9 +8,9 @@
 
 | 服务器 | 类型 | 地址 | 用途 |
 |--------|------|------|------|
-| `jira` | HTTP | https://internal.example.com/mcp/jira/ | Jira 任务管理、查询、创建、更新 |
-| `wiki` | HTTP | https://exp.example.com/mcp/wiki/ | Wiki 文档管理、知识协作 |
-| `gitee-code` | HTTP | https://code.example.com/code_mcp | 代码仓库管理、代码查询 |
+| `jira` | HTTP | /mcp/jira/ | Jira 任务管理、查询、创建、更新 |
+| `wiki` | HTTP | /mcp/wiki/ | Wiki 文档管理、知识协作 |
+| `gitee-code` | HTTP | /code_mcp | 代码仓库管理、代码查询 |
 
 ## 核心原则
 
