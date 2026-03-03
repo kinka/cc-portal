@@ -424,12 +424,13 @@ describe('E2E (real claude)', () => {
       expect(lower).toContain('bob');
 
       // Verify stored history: content is original (no prefix), from field is set
-      const histRes = await fetch(`${base}/sessions/${sessionId}`, {
+      const histRes = await fetch(`${base}/sessions/${sessionId}/messages`, {
         headers: { 'X-User-ID': owner },
       });
-      const { messages } = (await histRes.json()) as {
+      const histBody = (await histRes.json()) as {
         messages: Array<{ role: string; content: string; from?: string }>;
       };
+      const messages = histBody.messages || [];
       const aliceMsg = messages.find(m => m.from === owner && m.role === 'user');
       const bobMsg   = messages.find(m => m.from === participant && m.role === 'user');
 
