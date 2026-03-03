@@ -1,11 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
-import { resolve, normalize, isAbsolute } from 'node:path';
+import { mkdir, writeFile, access, cp } from 'node:fs/promises';
+import { resolve, normalize, isAbsolute, join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ClaudeSession } from './ClaudeSession';
 import { createLogger } from './logger';
 import type { DatabaseManager } from './db';
 
 const log = createLogger({ module: 'SessionManager' });
+
+// 获取当前文件所在目录
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const usersClaudeMdTemplate = join(__dirname, 'users-CLAUDE.md');
 
 export interface CreateSessionOptions {
   ownerId: string;
@@ -24,6 +29,8 @@ export interface CreateSessionOptions {
   envVars?: Record<string, string>;
   /** @deprecated use permissionMode: 'bypassPermissions' */
   bypassPermission?: boolean;
+  /** Tool name patterns to auto-allow without approval (e.g. Read, mcp__*__get*). */
+  autoAllowToolPatterns?: string[];
 }
 
 export interface SessionInfo {
@@ -50,6 +57,7 @@ export class ClaudeSessionManager {
   private usersDir: string;
   private agentApiBaseUrl?: string;
   private sessionLoadingLocks = new Map<string, Promise<ClaudeSession | undefined>>();
+  private usersDirInitialized = false;
 
   constructor(
     private db: DatabaseManager,
@@ -58,6 +66,36 @@ export class ClaudeSessionManager {
     this.usersDir = resolve(options.usersDir || process.env.USERS_DIR || './users');
     this.agentApiBaseUrl = options.agentApiBaseUrl;
     this.loadActiveSessionsFromDb();
+  }
+
+  /**
+   * 初始化 users 根目录
+   * - 复制 CLAUDE.md 模板到 users/CLAUDE.md（所有用户共享）
+   */
+  private async initUsersRootDirectory(): Promise<void> {
+    if (this.usersDirInitialized) return;
+
+    const claudeMdPath = join(this.usersDir, 'CLAUDE.md');
+
+    try {
+      // 确保 users 目录存在
+      await mkdir(this.usersDir, { recursive: true });
+
+      // 检查 CLAUDE.md 是否已存在
+      await access(claudeMdPath);
+    } catch {
+      // 不存在，从模板复制
+      try {
+        await cp(usersClaudeMdTemplate, claudeMdPath);
+        log.info({ usersDir: this.usersDir }, 'Created users/CLAUDE.md from template');
+      } catch (err) {
+        log.warn({ err }, 'Failed to copy CLAUDE.md template, creating default');
+        // 如果模板不存在，创建一个基础的 CLAUDE.md
+        await writeFile(claudeMdPath, `# CLAUDE.md\n\n用户工作目录配置\n`);
+      }
+    }
+
+    this.usersDirInitialized = true;
   }
 
   private loadActiveSessionsFromDb() {
@@ -88,6 +126,9 @@ export class ClaudeSessionManager {
       return targetPath;
     }
 
+    // 初始化 users 根目录（复制 CLAUDE.md 模板）
+    await this.initUsersRootDirectory();
+
     const userDir = resolve(this.usersDir, ownerId);
     let targetPath: string;
 
@@ -103,7 +144,26 @@ export class ClaudeSessionManager {
     }
 
     await mkdir(targetPath, { recursive: true });
+
+    // 在用户目录下创建空的 .git 目录（用于 Claude Code auto memory 存储）
+    await this.initUserGitDirectory(userDir);
+
     return targetPath;
+  }
+
+  /**
+   * 在用户目录下创建空的 .git 目录
+   * 用于 Claude Code auto memory 存储位置识别
+   */
+  private async initUserGitDirectory(userDir: string): Promise<void> {
+    const gitDir = join(userDir, '.git');
+
+    try {
+      await access(gitDir);
+    } catch {
+      await mkdir(gitDir, { recursive: true });
+      log.info({ userDir }, 'Created .git directory for memory storage');
+    }
   }
 
   async createSession(options: CreateSessionOptions): Promise<ClaudeSession> {
@@ -141,6 +201,7 @@ export class ClaudeSessionManager {
         envVars: options.envVars,
         initialMessage: options.initialMessage,
         bypassPermission: options.bypassPermission,
+        autoAllowToolPatterns: options.autoAllowToolPatterns,
         ownerId,
         sessionContext: this.agentApiBaseUrl
           ? { apiBaseUrl: this.agentApiBaseUrl, userId: ownerId }

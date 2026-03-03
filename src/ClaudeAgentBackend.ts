@@ -142,6 +142,15 @@ export interface ClaudeAgentBackendOptions {
   maxTurns?: number;
   /** If true, use --session-id (new session). If false, use --resume (existing session). */
   isNewSession?: boolean;
+  /**
+   * Tool name patterns that skip approval (auto-allow). Used when permissionMode is not bypassPermissions.
+   * Each pattern can be exact ("Read") or glob ("mcp__*__get*"). Overrides default read-only list when set.
+   */
+  autoAllowToolPatterns?: string[];
+  /**
+   * Custom predicate: (toolName, input) => true to auto-allow without approval. Runs after autoAllowToolPatterns.
+   */
+  isAutoAllowTool?: (toolName: string, input: unknown) => boolean;
 }
 
 export class ClaudeAgentBackend extends EventEmitter {
@@ -156,6 +165,8 @@ export class ClaudeAgentBackend extends EventEmitter {
   private mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
   private maxTurns?: number;
   private isNewSession = true;
+  private autoAllowToolPatterns?: string[];
+  private isAutoAllowTool?: (toolName: string, input: unknown) => boolean;
 
   private child?: ChildProcessWithoutNullStreams;
   private rl?: Interface;
@@ -186,6 +197,8 @@ export class ClaudeAgentBackend extends EventEmitter {
     this.mcpServers = options.mcpServers;
     this.maxTurns = options.maxTurns;
     this.isNewSession = options.isNewSession ?? true;
+    this.autoAllowToolPatterns = options.autoAllowToolPatterns;
+    this.isAutoAllowTool = options.isAutoAllowTool;
     // Backward compat: bypassPermission true => bypassPermissions
     if (options.bypassPermission !== undefined) {
       this.permissionMode = options.bypassPermission ? 'bypassPermissions' : 'default';
@@ -211,6 +224,34 @@ export class ClaudeAgentBackend extends EventEmitter {
     }
   }
 
+  /** Default tool names/patterns treated as read-only or low-risk (no approval when using auto-allow). */
+  private static readonly DEFAULT_AUTO_ALLOW_PATTERNS = [
+    'Read',
+    'Glob',
+    'Grep',
+    'LS',
+    'TodoRead',
+    'WebFetch',
+    'WebSearch',
+    'mcp__*__get*',
+    'mcp__*__list*',
+    'mcp__*__search*',
+    'mcp__*__fetch*',
+    'mcp__*__read*',
+  ];
+
+  private static matchToolPattern(toolName: string, pattern: string): boolean {
+    if (pattern === toolName) return true;
+    const re = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+    return re.test(toolName);
+  }
+
+  private isToolAutoAllow(toolName: string, input: unknown): boolean {
+    const patterns = this.autoAllowToolPatterns ?? ClaudeAgentBackend.DEFAULT_AUTO_ALLOW_PATTERNS;
+    if (patterns.some((p) => ClaudeAgentBackend.matchToolPattern(toolName, p))) return true;
+    return this.isAutoAllowTool?.(toolName, input) ?? false;
+  }
+
   private async handleControlRequest(request: CanUseToolControlRequest): Promise<void> {
     if (!this.child?.stdin) return;
     const controller = new AbortController();
@@ -219,9 +260,16 @@ export class ClaudeAgentBackend extends EventEmitter {
     try {
       let response: PermissionResult;
       if (request.request.subtype === 'can_use_tool') {
+        const toolName = request.request.tool_name;
+        const input = request.request.input;
+        const inputObj = (input || {}) as Record<string, unknown>;
+
         // In bypassPermissions mode, auto-allow all tool calls
         if (this.permissionMode === 'bypassPermissions') {
-          response = { behavior: 'allow', updatedInput: (request.request.input || {}) as Record<string, unknown> };
+          response = { behavior: 'allow', updatedInput: inputObj };
+        } else if (this.isToolAutoAllow(toolName, input)) {
+          // Read-only / low-risk: skip approval
+          response = { behavior: 'allow', updatedInput: inputObj };
         } else if (this.canCallTool) {
           response = await this.canCallTool(request.request.tool_name, request.request.input, {
             signal: controller.signal,

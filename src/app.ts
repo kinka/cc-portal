@@ -119,6 +119,8 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
       maxTurns?: number;
       envVars?: Record<string, string>;
       bypassPermission?: boolean;
+      /** Tool name patterns to auto-allow without approval (e.g. Read, mcp__*__get*). */
+      autoAllowToolPatterns?: string[];
     };
 
     // Allow caller to create a session on behalf of another user (agent delegation)
@@ -154,6 +156,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
         maxTurns: body.maxTurns,
         envVars: body.envVars,
         bypassPermission: body.bypassPermission,
+        autoAllowToolPatterns: body.autoAllowToolPatterns,
       });
 
       // Auto-touch user in directory
@@ -493,6 +496,7 @@ export function buildLegacyApp(): FastifyInstance {
       maxTurns?: number;
       envVars?: Record<string, string>;
       bypassPermission?: boolean;
+      autoAllowToolPatterns?: string[];
     };
 
     if (!body.path) {
@@ -517,6 +521,7 @@ export function buildLegacyApp(): FastifyInstance {
         maxTurns: body.maxTurns,
         envVars: body.envVars,
         bypassPermission: body.bypassPermission,
+        autoAllowToolPatterns: body.autoAllowToolPatterns,
       });
 
       return {

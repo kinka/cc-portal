@@ -39,6 +39,10 @@ export interface ClaudeSessionOptions {
   initialParticipants?: string[];
   /** API base URL and auth info for injecting into session context header. */
   sessionContext?: { apiBaseUrl: string; userId: string };
+  /** Tool name patterns to auto-allow without approval (e.g. Read, mcp__*__get*). When set, overrides backend default. */
+  autoAllowToolPatterns?: string[];
+  /** Custom (toolName, input) => true to auto-allow. Used only when creating session in code. */
+  isAutoAllowTool?: (toolName: string, input: unknown) => boolean;
 }
 
 /** One pending tool approval request (HTTP flow). */
@@ -124,6 +128,8 @@ export class ClaudeSession extends EventEmitter {
       maxTurns: options.maxTurns,
       bypassPermission: options.bypassPermission,
       isNewSession: options.isNewSession,
+      autoAllowToolPatterns: options.autoAllowToolPatterns,
+      isAutoAllowTool: options.isAutoAllowTool,
     });
 
     // Send initial message if provided
