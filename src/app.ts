@@ -414,6 +414,26 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
     return { ok: true };
   });
 
+  fastify.post('/sessions/:sessionId/stop', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!manager) {
+      reply.status(503);
+      return { error: 'Service not fully initialized' };
+    }
+
+    const userContext = requireUserContext(request);
+    const { sessionId } = request.params as { sessionId: string };
+
+    const session = await manager.getSession(sessionId, userContext.userId);
+    if (!session) {
+      reply.status(404);
+      return { error: 'Session not found or access denied' };
+    }
+
+    // Stop the session by destroying it (keeps DB record but kills the process)
+    session.destroy();
+    return { sessionId, status: 'stopped' };
+  });
+
   fastify.delete('/sessions/:sessionId', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!manager) {
       reply.status(503);
@@ -649,6 +669,19 @@ export function buildLegacyApp(): FastifyInstance {
       return { error: 'request_not_found_or_already_responded' };
     }
     return { ok: true };
+  });
+
+  fastify.post('/sessions/:sessionId/stop', async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+
+    const session = await manager.getSession(sessionId, 'legacy');
+    if (!session) {
+      reply.status(404);
+      return { error: 'Session not found' };
+    }
+
+    session.destroy();
+    return { sessionId, status: 'stopped' };
   });
 
   fastify.delete('/sessions/:sessionId', async (request, reply) => {
