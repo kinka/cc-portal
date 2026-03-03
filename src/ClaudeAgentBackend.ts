@@ -233,11 +233,13 @@ export class ClaudeAgentBackend extends EventEmitter {
     'TodoRead',
     'WebFetch',
     'WebSearch',
-    'mcp__*__get*',
-    'mcp__*__list*',
-    'mcp__*__search*',
-    'mcp__*__fetch*',
-    'mcp__*__read*',
+    // *verb*: tool name contains the word (e.g. jira_find_issue, get_issue, list_issues)
+    'mcp__*__*get*',
+    'mcp__*__*list*',
+    'mcp__*__*search*',
+    'mcp__*__*fetch*',
+    'mcp__*__*read*',
+    'mcp__*__*find*',
   ];
 
   private static matchToolPattern(toolName: string, pattern: string): boolean {
@@ -246,10 +248,47 @@ export class ClaudeAgentBackend extends EventEmitter {
     return re.test(toolName);
   }
 
+  /** Replace undefined with null so JSON.stringify preserves keys (CLI needs e.g. issueKey). */
+  private static sanitizeForJson(obj: Record<string, unknown>): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (v === undefined) {
+        out[k] = null;
+      } else if (v !== null && typeof v === 'object' && !Array.isArray(v) && Object.getPrototypeOf(v) === Object.prototype) {
+        out[k] = ClaudeAgentBackend.sanitizeForJson(v as Record<string, unknown>);
+      } else if (Array.isArray(v)) {
+        out[k] = v.map((item) =>
+          item !== null && typeof item === 'object' && !Array.isArray(item) && Object.getPrototypeOf(item) === Object.prototype
+            ? ClaudeAgentBackend.sanitizeForJson(item as Record<string, unknown>)
+            : item === undefined ? null : item
+        );
+      } else {
+        out[k] = v;
+      }
+    }
+    return out;
+  }
+
   private isToolAutoAllow(toolName: string, input: unknown): boolean {
-    const patterns = this.autoAllowToolPatterns ?? ClaudeAgentBackend.DEFAULT_AUTO_ALLOW_PATTERNS;
+    // Always start with defaults and append custom patterns. Frontend passing [] must not clear presets
+    // (if we used only this.autoAllowToolPatterns, then [] would be truthy and we'd have no patterns).
+    const custom = this.autoAllowToolPatterns ?? [];
+    const patterns = ClaudeAgentBackend.DEFAULT_AUTO_ALLOW_PATTERNS.concat(custom);
     if (patterns.some((p) => ClaudeAgentBackend.matchToolPattern(toolName, p))) return true;
     return this.isAutoAllowTool?.(toolName, input) ?? false;
+  }
+
+  /** Write to child stdin and wait until the chunk is flushed (so CLI can read control_response). */
+  private writeAndFlushStdin(payload: string): Promise<void> {
+    if (!this.child?.stdin) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      this.child!.stdin!.write(payload, (err) => {
+        if (err) {
+          log.error({ err }, 'control_response write error');
+          reject(err);
+        } else resolve();
+      });
+    });
   }
 
   private async handleControlRequest(request: CanUseToolControlRequest): Promise<void> {
@@ -259,10 +298,13 @@ export class ClaudeAgentBackend extends EventEmitter {
 
     try {
       let response: PermissionResult;
+      const inputObj =
+        request.request.subtype === 'can_use_tool'
+          ? ((request.request.input || {}) as Record<string, unknown>)
+          : {};
       if (request.request.subtype === 'can_use_tool') {
         const toolName = request.request.tool_name;
         const input = request.request.input;
-        const inputObj = (input || {}) as Record<string, unknown>;
 
         // In bypassPermissions mode, auto-allow all tool calls
         if (this.permissionMode === 'bypassPermissions') {
@@ -300,15 +342,40 @@ export class ClaudeAgentBackend extends EventEmitter {
         throw new Error('Unsupported control request subtype: ' + (request.request as { subtype?: string }).subtype);
       }
 
+      // When allowing, ensure we never send empty updatedInput: CLI may use it as the tool input
+      // and overwrite the original (e.g. issueKey). If caller didn't provide updatedInput, keep original.
+      let payloadResponse = response;
+      if (response.behavior === 'allow') {
+        const u = response.updatedInput;
+        if (!u || (typeof u === 'object' && Object.keys(u).length === 0)) {
+          payloadResponse = { behavior: 'allow', updatedInput: inputObj };
+        }
+      }
+
+      // JSON.stringify omits keys with value undefined; CLI needs full tool input (e.g. issueKey).
+      // Clone and replace undefined with null so keys are preserved in the wire format.
+      if (payloadResponse.behavior === 'allow' && payloadResponse.updatedInput) {
+        const o = payloadResponse.updatedInput as Record<string, unknown>;
+        payloadResponse = {
+          behavior: 'allow',
+          updatedInput: ClaudeAgentBackend.sanitizeForJson(o),
+        };
+      }
+
       const controlResponse: CanUseToolControlResponse = {
         type: 'control_response',
         response: {
           subtype: 'success',
           request_id: request.request_id,
-          response,
+          response: payloadResponse,
         },
       };
-      this.child.stdin.write(JSON.stringify(controlResponse) + '\n');
+      const payload = JSON.stringify(controlResponse) + '\n';
+      await this.writeAndFlushStdin(payload);
+      log.info(
+        { requestId: request.request_id, allowed: response.behavior === 'allow' },
+        'Sent control_response to CLI'
+      );
     } catch (err) {
       const controlError: CanUseToolControlResponse = {
         type: 'control_response',
@@ -318,7 +385,7 @@ export class ClaudeAgentBackend extends EventEmitter {
           error: err instanceof Error ? err.message : String(err),
         },
       };
-      this.child.stdin!.write(JSON.stringify(controlError) + '\n');
+      await this.writeAndFlushStdin(JSON.stringify(controlError) + '\n');
     } finally {
       this.cancelControllers.delete(request.request_id);
     }
@@ -405,7 +472,6 @@ export class ClaudeAgentBackend extends EventEmitter {
       '--verbose',
     ];
     if (useSrt) {
-      // Resolve to absolute path so the child process finds it regardless of cwd (session dir)
       const settingsPath = join(import.meta.dirname, 'srt-settings.json');
       args.unshift('--settings', settingsPath);
       args.unshift('claude');
@@ -417,7 +483,8 @@ export class ClaudeAgentBackend extends EventEmitter {
     if (this.allowedTools?.length) args.push('--allowedTools', this.allowedTools.join(','));
     if (this.disallowedTools?.length) args.push('--disallowedTools', this.disallowedTools.join(','));
     if (this.maxTurns != null) args.push('--max-turns', String(this.maxTurns));
-    if (this.canCallTool) args.push('--permission-prompt-tool', 'stdio');
+    // CLI must use stdio control protocol when we resolve permissions (canCallTool or HTTP permissionResolver)
+    if (this.canCallTool || this.permissionResolver) args.push('--permission-prompt-tool', 'stdio');
     if (this.mcpServers && Object.keys(this.mcpServers).length > 0) {
       args.push('--mcp-config', JSON.stringify({ mcpServers: this.mcpServers }));
     }

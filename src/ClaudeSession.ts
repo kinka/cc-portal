@@ -193,10 +193,14 @@ export class ClaudeSession extends EventEmitter {
   /** Resolve a pending permission (e.g. from HTTP POST). Returns false if requestId not found or already resolved. */
   respondToPermission(requestId: string, result: PermissionResult): boolean {
     const pending = this.pendingPermissions.get(requestId);
-    if (!pending) return false;
+    if (!pending) {
+      this.log.warn({ requestId, pendingIds: [...this.pendingPermissions.keys()] }, 'respondToPermission: requestId not found');
+      return false;
+    }
     this.pendingPermissions.delete(requestId);
     if (pending.timeoutHandle) clearTimeout(pending.timeoutHandle);
     pending.resolve(result);
+    this.log.info({ requestId, allowed: result.behavior === 'allow' }, 'Permission resolved');
     // Notify SSE subscribers
     this.emit('permissionResolved', { requestId, result });
     return true;

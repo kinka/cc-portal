@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jira 查询演示 - CC-Portal</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 {
+      text-align: center;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      text-align: center;
+      color: #94a3b8;
+      font-size: 0.9rem;
+      margin-bottom: 24px;
+    }
+    .panel {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid #334155;
+    }
+    .panel-title {
+      font-size: 0.75rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .row:last-child { margin-bottom: 0; }
+    label {
+      font-size: 0.875rem;
+      color: #94a3b8;
+      min-width: 70px;
+    }
+    input[type="text"] {
+      flex: 1;
+      min-width: 180px;
+      padding: 10px 14px;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-size: 0.9rem;
+    }
+    input:focus {
+      outline: none;
+      border-color: #60a5fa;
+    }
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    button.primary {
+      background: #3b82f6;
+      color: white;
+    }
+    button.primary:hover:not(:disabled) { background: #2563eb; }
+    button.secondary {
+      background: #475569;
+      color: #e2e8f0;
+    }
+    button.secondary:hover:not(:disabled) { background: #334155; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .chat-container {
+      max-height: 420px;
+      overflow-y: auto;
+    }
+    .message {
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      border-radius: 10px;
+      animation: fadeIn 0.25s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .message.user {
+      background: #1e3a8a;
+      margin-left: 15%;
+    }
+    .message.assistant {
+      background: #334155;
+      border: 1px solid #475569;
+      margin-right: 15%;
+    }
+    .message-header {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+    .message-content {
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .message-content.streaming {
+      border-right: 2px solid #60a5fa;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink {
+      50% { border-color: transparent; }
+    }
+    .tool-call {
+      background: #0f172a;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin: 8px 0;
+      font-size: 0.8rem;
+      border: 1px solid #334155;
+    }
+    .tool-call-header {
+      color: #fbbf24;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .tool-call-content {
+      color: #94a3b8;
+      font-family: monospace;
+      font-size: 0.75rem;
+      overflow-x: auto;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: #64748b;
+    }
+    .typing-indicator {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px 0;
+    }
+    .typing-indicator span {
+      width: 6px;
+      height: 6px;
+      background: #60a5fa;
+      border-radius: 50%;
+      animation: bounce 1.4s infinite ease-in-out both;
+    }
+    .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+    .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); }
+    }
+    .log {
+      margin-top: 12px;
+      font-size: 0.75rem;
+      color: #64748b;
+    }
+    .log.error { color: #f87171; }
+    .permission-dialog {
+      background: #1e3a5f;
+      border: 1px solid #3b82f6;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin: 10px 0;
+      margin-right: 15%;
+    }
+    .permission-dialog-title {
+      font-size: 0.8rem;
+      color: #93c5fd;
+      margin-bottom: 6px;
+    }
+    .permission-dialog-tool {
+      font-weight: 600;
+      color: #e2e8f0;
+      margin-bottom: 4px;
+    }
+    .permission-dialog-input {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      font-family: monospace;
+      margin-bottom: 12px;
+      word-break: break-all;
+      max-height: 60px;
+      overflow-y: auto;
+    }
+    .permission-dialog-actions {
+      display: flex;
+      gap: 10px;
+    }
+    .permission-dialog-actions button {
+      padding: 8px 16px;
+      font-size: 0.875rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Jira 查询演示</h1>
+    <p class="subtitle">默认查询 INFO-12954，可修改后发送</p>
+
+    <div class="panel">
+      <div class="panel-title">配置</div>
+      <div class="row">
+        <label>API</label>
+        <input type="text" id="apiUrl" value="http://localhost:3333" placeholder="http://localhost:3333">
+      </div>
+      <div class="row">
+        <label>用户</label>
+        <input type="text" id="userId" value="huangqinjia" placeholder="userId">
+      </div>
+      <div class="row">
+        <button id="btnCreate" class="primary" onclick="createSession()">创建 Session</button>
+        <button id="btnDelete" class="secondary" onclick="deleteSession()" disabled>删除 Session</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">发送消息</div>
+      <div class="row">
+        <input type="text" id="messageInput" value="帮我查询INFO-12954内容" placeholder="输入消息...">
+        <button id="btnSend" class="primary" onclick="sendMessage()" disabled>发送</button>
+      </div>
+      <div id="log" class="log"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">对话</div>
+      <div id="chatContainer" class="chat-container">
+        <div class="empty-state">
+          点击「创建 Session」后，使用上方默认文案或修改后点击「发送」
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const DEFAULT_MESSAGE = '帮我查询INFO-12954内容';
+    let sessionId = null;
+    let eventSource = null;
+    let currentMessageEl = null;
+
+    function getApiUrl() {
+      return document.getElementById('apiUrl').value.trim() || 'http://localhost:3333';
+    }
+    function getUserId() {
+      return document.getElementById('userId').value.trim() || 'huangqinjia';
+    }
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    function log(msg, isError) {
+      const el = document.getElementById('log');
+      const time = new Date().toLocaleTimeString('zh-CN');
+      el.textContent = `[${time}] ${msg}`;
+      el.className = 'log' + (isError ? ' error' : '');
+    }
+
+    function addMessage(role, content, streaming) {
+      const container = document.getElementById('chatContainer');
+      if (container.querySelector('.empty-state')) container.innerHTML = '';
+
+      const msg = document.createElement('div');
+      msg.className = 'message ' + role;
+      msg.innerHTML = '<div class="message-header">' + (role === 'user' ? '👤 用户' : '🤖 Claude') + '</div><div class="message-content' + (streaming ? ' streaming' : '') + '"></div>';
+      const contentEl = msg.querySelector('.message-content');
+      contentEl.textContent = content;
+      container.appendChild(msg);
+      container.scrollTop = container.scrollHeight;
+      return contentEl;
+    }
+
+    function addToolCall(toolName, input) {
+      const container = document.getElementById('chatContainer');
+      const div = document.createElement('div');
+      div.className = 'tool-call';
+      div.innerHTML = '<div class="tool-call-header">🔧 ' + toolName + '</div><div class="tool-call-content"></div>';
+      div.querySelector('.tool-call-content').textContent = typeof input === 'string' ? input : JSON.stringify(input, null, 2);
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    async function createSession() {
+      const api = getApiUrl();
+      const userId = getUserId();
+      try {
+        log('创建 Session...');
+        const res = await fetch(api + '/sessions?userId=' + encodeURIComponent(userId), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+          ownerId: userId,
+          permissionMode: 'default',
+          autoAllowToolPatterns: [],
+        }),
+        });
+        const data = await res.json();
+        if (data.sessionId) {
+          sessionId = data.sessionId;
+          log('Session 已创建: ' + sessionId.slice(0, 8) + '...');
+          document.getElementById('btnCreate').disabled = true;
+          document.getElementById('btnDelete').disabled = false;
+          document.getElementById('btnSend').disabled = false;
+          document.getElementById('messageInput').value = DEFAULT_MESSAGE;
+        } else {
+          log((data.error || data.message) || JSON.stringify(data), true);
+        }
+      } catch (e) {
+        log('创建失败: ' + e.message, true);
+      }
+    }
+
+    function streamMessage(message) {
+      return new Promise((resolve, reject) => {
+        if (!sessionId) {
+          reject(new Error('请先创建 Session'));
+          return;
+        }
+        const api = getApiUrl();
+        const userId = getUserId();
+        addMessage('user', message);
+        currentMessageEl = addMessage('assistant', '', true);
+        const typing = document.createElement('span');
+        typing.className = 'typing-indicator';
+        typing.innerHTML = '<span></span><span></span><span></span>';
+        currentMessageEl.appendChild(typing);
+
+        const url = api + '/sessions/' + sessionId + '/stream?userId=' + encodeURIComponent(userId) + '&message=' + encodeURIComponent(message);
+        eventSource = new EventSource(url);
+        let fullContent = '';
+
+        eventSource.onmessage = async (event) => {
+          if (event.data === '[DONE]') {
+            eventSource.close();
+            if (currentMessageEl) {
+              currentMessageEl.classList.remove('streaming');
+              const t = currentMessageEl.querySelector('.typing-indicator');
+              if (t) t.remove();
+            }
+            log('流式输出结束');
+            resolve(fullContent);
+            return;
+          }
+          try {
+            const chunk = JSON.parse(event.data);
+            if (chunk.type === 'permission_request') {
+              const reqId = chunk.requestId;
+              const toolName = chunk.toolName || 'tool';
+              const toolInput = chunk.toolInput != null ? JSON.stringify(chunk.toolInput) : '';
+              const toolInputShort = toolInput.length > 200 ? toolInput.slice(0, 200) + '...' : toolInput;
+              addMessage('assistant', '⏳ 请批准下方工具调用');
+              const dialog = document.createElement('div');
+              dialog.className = 'permission-dialog';
+              dialog.innerHTML = '<div class="permission-dialog-title">请求使用工具</div><div class="permission-dialog-tool">' + escapeHtml(toolName) + '</div>' + (toolInputShort ? '<div class="permission-dialog-input">' + escapeHtml(toolInputShort) + '</div>' : '') + '<div class="permission-dialog-actions"><button class="primary" data-allow="1">允许</button><button class="secondary" data-allow="0">拒绝</button></div>';
+              const doResponse = async (allowed) => {
+                dialog.remove();
+                const permUrl = api + '/sessions/' + sessionId + '/permissions/' + encodeURIComponent(reqId) + '?userId=' + encodeURIComponent(userId);
+                const res = await fetch(permUrl, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(allowed ? { approved: true } : { approved: false, message: '用户拒绝' }),
+                });
+                if (res.ok) log(allowed ? '已允许: ' + toolName : '已拒绝: ' + toolName);
+                else log('响应权限失败: ' + (await res.text()), true);
+              };
+              dialog.querySelector('[data-allow="1"]').addEventListener('click', () => doResponse(true));
+              dialog.querySelector('[data-allow="0"]').addEventListener('click', () => doResponse(false));
+              document.getElementById('chatContainer').appendChild(dialog);
+              return;
+            }
+            if (chunk.type === 'text' && chunk.content) {
+              fullContent += chunk.content;
+              if (currentMessageEl) {
+                const t = currentMessageEl.querySelector('.typing-indicator');
+                if (t) t.remove();
+                currentMessageEl.textContent = fullContent;
+              }
+            } else if (chunk.type === 'tool_start') {
+              addToolCall(chunk.toolName || 'tool', chunk.toolInput);
+            } else if (chunk.type === 'error') {
+              log('错误: ' + (chunk.error || 'Unknown'), true);
+            }
+          } catch (_) {}
+        };
+
+        eventSource.onerror = () => {
+          eventSource.close();
+          if (!fullContent) reject(new Error('SSE 连接失败'));
+          else resolve(fullContent);
+        };
+      });
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('messageInput');
+      const message = input.value.trim();
+      if (!message) return;
+
+      document.getElementById('btnSend').disabled = true;
+      try {
+        await streamMessage(message);
+      } catch (e) {
+        log('发送失败: ' + e.message, true);
+        addMessage('assistant', '❌ ' + e.message);
+      } finally {
+        document.getElementById('btnSend').disabled = false;
+      }
+    }
+
+    async function deleteSession() {
+      if (!sessionId) return;
+      try {
+        await fetch(getApiUrl() + '/sessions/' + sessionId + '?userId=' + encodeURIComponent(getUserId()), { method: 'DELETE' });
+        sessionId = null;
+        document.getElementById('btnCreate').disabled = false;
+        document.getElementById('btnDelete').disabled = true;
+        document.getElementById('btnSend').disabled = true;
+        document.getElementById('chatContainer').innerHTML = '<div class="empty-state">已删除 Session，可重新创建</div>';
+        log('Session 已删除');
+      } catch (e) {
+        log('删除失败: ' + e.message, true);
+      }
+    }
+
+    document.getElementById('messageInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+  </script>
+</body>
+</html>

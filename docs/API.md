@@ -131,6 +131,8 @@ curl "http://localhost:3333/sessions/SESSION_ID/messages?userId=user-b&detailed=
 | `detailed` | boolean | 返回完整历史（包含 tool_use, tool_result） |
 | `limit` | number | 限制返回消息数量（返回最新的 N 条） |
 
+> 说明：此接口**仅返回已有历史**，不接受 `message` 参数。若 URL 中带了 `message=...` 会被忽略。要「发送消息并拿到回复」请用 `GET /sessions/:id/stream?message=...`（流式）或 `POST /sessions/:id/messages`（请求体传 message）。
+
 **响应**:
 ```json
 {
