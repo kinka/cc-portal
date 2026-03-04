@@ -95,8 +95,7 @@ export interface SDKControlResponse extends SDKMessage {
 
 export type PermissionResult =
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
-  | { behavior: 'deny'; message: string }
-  | { behavior: 'waiting'; message: string };
+  | { behavior: 'deny'; message: string };
 
 export interface CanCallToolCallback {
   (toolName: string, input: unknown, options: { signal: AbortSignal }): Promise<PermissionResult>;

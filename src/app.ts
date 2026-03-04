@@ -322,11 +322,28 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
       const stream = session.sendMessageStream(message, userContext.userId);
 
       for await (const chunk of stream) {
+        // On permission_request, enhance response and close stream
+        if (chunk.type === 'permission_request') {
+          const enhancedChunk = {
+            ...chunk,
+            sessionId,
+            approvalUrl: `/sessions/${sessionId}/permissions/${chunk.requestId}`,
+            approvalMethod: 'POST',
+            approvalBody: {
+              approved: true, // or false
+              updatedInput: {}, // optional
+              message: 'optional reason for denial',
+            },
+            reconnectHint: 'Reconnect to /stream without message parameter to continue after approval.',
+          };
+          reply.raw.write(`data: ${JSON.stringify(enhancedChunk)}\n\n`);
+          reply.raw.end();
+          return;
+        }
         reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
       }
 
       reply.raw.write('data: [DONE]\n\n');
-      reply.raw.end();
     } catch (error) {
       logger.error({ error: String(error), sessionId }, 'Stream error');
       reply.raw.write(`data: ${JSON.stringify({ error: String(error) })}\n\n`);
@@ -597,11 +614,28 @@ export function buildLegacyApp(): FastifyInstance {
       const stream = session.sendMessageStream(message);
 
       for await (const chunk of stream) {
+        // On permission_request, enhance response and close stream
+        if (chunk.type === 'permission_request') {
+          const enhancedChunk = {
+            ...chunk,
+            sessionId,
+            approvalUrl: `/sessions/${sessionId}/permissions/${chunk.requestId}`,
+            approvalMethod: 'POST',
+            approvalBody: {
+              approved: true, // or false
+              updatedInput: {}, // optional
+              message: 'optional reason for denial',
+            },
+            reconnectHint: 'Reconnect to /stream without message parameter to continue after approval.',
+          };
+          reply.raw.write(`data: ${JSON.stringify(enhancedChunk)}\n\n`);
+          reply.raw.end();
+          return;
+        }
         reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
       }
 
       reply.raw.write('data: [DONE]\n\n');
-      reply.raw.end();
     } catch (error) {
       logger.error({ error: String(error), sessionId }, 'Stream error');
       reply.raw.write(`data: ${JSON.stringify({ error: String(error) })}\n\n`);

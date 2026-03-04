@@ -76,7 +76,7 @@ export interface RawHistoryEntry {
 
 /** Stream chunk types aligned with happy-cli message handling */
 export interface StreamChunk {
-  type: 'text' | 'tool_start' | 'tool_end' | 'tool_output' | 'error' | 'done' | 'system' | 'log' | 'permission_request' | 'waiting_for_permission';
+  type: 'text' | 'tool_start' | 'tool_end' | 'tool_output' | 'error' | 'done' | 'system' | 'log' | 'permission_request';
   content?: string;
   toolName?: string;
   toolInput?: unknown;
@@ -239,7 +239,7 @@ export class ClaudeAgentBackend extends EventEmitter {
     'mcp__*__*search*',
     'mcp__*__*fetch*',
     'mcp__*__*read*',
-    'mcp__*__*find*',
+    // 'mcp__*__*find*',
   ];
 
   private static matchToolPattern(toolName: string, pattern: string): boolean {
@@ -329,14 +329,6 @@ export class ClaudeAgentBackend extends EventEmitter {
               request.request.tool_name,
               request.request.input,
             );
-            // If response is 'waiting', the stream should exit gracefully
-            // Permission remains pending and can be resolved later via HTTP
-            if (response.behavior === 'waiting') {
-              log.info({ requestId: request.request_id }, 'Permission waiting - stream will exit');
-              // Emit event for queryStream to yield waiting_for_permission chunk
-              this.emit('permissionWaiting', { requestId: request.request_id });
-              return; // Don't send control_response, just exit
-            }
           } catch (err) {
             response = {
               behavior: 'deny',
@@ -514,10 +506,12 @@ export class ClaudeAgentBackend extends EventEmitter {
       this.isInitialized = false;
     });
       this.child.on('close', (code) => {
-      log.info({ code }, 'Process exited');
-      this.isInitialized = false;
-      this.rl?.close();
-    });
+        log.info({ code }, 'Process exited');
+        this.isInitialized = false;
+        this.rl?.close();
+        // Notify listeners that process died (for cleaning up pending permissions)
+        this.emit('processDied', { code });
+      });
       let stderrBuffer = '';
     this.child.stderr!.on('data', (data) => {
       const text = data.toString();
@@ -623,21 +617,10 @@ export class ClaudeAgentBackend extends EventEmitter {
           this.once('permissionRequest', handler);
         });
 
-      // Create a promise that resolves when permission waiting times out
-      const waitForPermissionWaiting = (): Promise<{ type: 'waiting_for_permission'; requestId: string }> =>
-        new Promise((resolve) => {
-          const handler = (data: { requestId: string }) => {
-            this.off('permissionWaiting', handler);
-            resolve({ type: 'waiting_for_permission', ...data });
-          };
-          this.once('permissionWaiting', handler);
-        });
-
-      const nextWithTimeout = (): Promise<SDKMessage | { type: 'permission_request'; requestId: string; toolName: string; input: unknown } | { type: 'waiting_for_permission'; requestId: string }> =>
+      const nextWithTimeout = (): Promise<SDKMessage | { type: 'permission_request'; requestId: string; toolName: string; input: unknown }> =>
         Promise.race([
           this.messageQueue.next(),
           waitForPermissionRequest(),
-          waitForPermissionWaiting(),
           new Promise<never>((_, reject) => {
             timeoutHandle = setTimeout(() => reject(new Error('Timeout after 300s')), timeoutMs);
           }),
@@ -645,18 +628,6 @@ export class ClaudeAgentBackend extends EventEmitter {
 
       while (true) {
         const msgOrEvent = await nextWithTimeout();
-
-        // Handle permission waiting timeout - stream should exit gracefully
-        if (msgOrEvent && typeof msgOrEvent === 'object' && 'type' in msgOrEvent && msgOrEvent.type === 'waiting_for_permission') {
-          const event = msgOrEvent as { type: 'waiting_for_permission'; requestId: string };
-          yield {
-            type: 'waiting_for_permission',
-            requestId: event.requestId,
-            content: 'Waiting for user permission. You can approve/deny via HTTP API.',
-          };
-          // Stream exits here - permission remains pending
-          return;
-        }
 
         // Handle permission request event from HTTP flow
         if (msgOrEvent && typeof msgOrEvent === 'object' && 'type' in msgOrEvent && msgOrEvent.type === 'permission_request') {
@@ -668,7 +639,8 @@ export class ClaudeAgentBackend extends EventEmitter {
             toolInput: event.input,
             content: `Claude requests to use tool: ${event.toolName}`,
           };
-          continue;
+          return; // Close stream on permission_request, client should reconnect after approval
+
         }
 
         const msg = msgOrEvent as SDKMessage;

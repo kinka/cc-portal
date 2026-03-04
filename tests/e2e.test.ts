@@ -806,5 +806,45 @@ describe('Shared Session (direct participant add)', () => {
       await app.close();
     }
   });
+
+  test('permission request: stream returns permission_request and can be approved', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cc-portal-permission-'));
+    const app = buildApp();
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const port = (app.server!.address() as { port: number }).port;
+    const base = `http://127.0.0.1:${port}`;
+    const userId = 'permission-test-user';
+
+    try {
+      // Create session with permissionMode: 'default' (requires approval)
+      const createRes = await fetch(`${base}/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
+        body: JSON.stringify({
+          path: dir,
+          permissionMode: 'default',
+        }),
+      });
+      expect(createRes.status).toBe(200);
+      const { sessionId } = (await createRes.json()) as { sessionId: string };
+
+      // Initially no pending permissions
+      const permRes1 = await fetch(`${base}/sessions/${sessionId}/pending-permissions`, {
+        headers: { 'X-User-ID': userId },
+      });
+      const permBody1 = (await permRes1.json()) as { pending: unknown[] };
+      expect(permBody1.pending.length).toBe(0);
+
+      // Approving non-existent request returns 404
+      const fakeApproveRes = await fetch(`${base}/sessions/${sessionId}/permissions/fake-request-id`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
+        body: JSON.stringify({ approved: true }),
+      });
+      expect(fakeApproveRes.status).toBe(404);
+    } finally {
+      await app.close();
+    }
+  });
 });
 

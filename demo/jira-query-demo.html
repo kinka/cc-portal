@@ -339,14 +339,21 @@
         }
         const api = getApiUrl();
         const userId = getUserId();
-        addMessage('user', message);
+        
+        // Only add user message if we have a message (not reconnecting for approval)
+        if (message) {
+          addMessage('user', message);
+        }
         currentMessageEl = addMessage('assistant', '', true);
         const typing = document.createElement('span');
         typing.className = 'typing-indicator';
         typing.innerHTML = '<span></span><span></span><span></span>';
-        currentMessageEl.appendChild(typing);
 
-        const url = api + '/sessions/' + sessionId + '/stream?userId=' + encodeURIComponent(userId) + '&message=' + encodeURIComponent(message);
+        // Build URL - only include message if provided
+        let url = api + '/sessions/' + sessionId + '/stream?userId=' + encodeURIComponent(userId);
+        if (message) {
+          url += '&message=' + encodeURIComponent(message);
+        }
         eventSource = new EventSource(url);
         let fullContent = '';
 
@@ -364,31 +371,53 @@
           }
           try {
             const chunk = JSON.parse(event.data);
+            
+            // Handle permission_request - stream will close, show dialog then reconnect
             if (chunk.type === 'permission_request') {
+              eventSource.close();
+              
               const reqId = chunk.requestId;
               const toolName = chunk.toolName || 'tool';
               const toolInput = chunk.toolInput != null ? JSON.stringify(chunk.toolInput) : '';
               const toolInputShort = toolInput.length > 200 ? toolInput.slice(0, 200) + '...' : toolInput;
+              const approvalUrl = chunk.approvalUrl || ('/sessions/' + sessionId + '/permissions/' + reqId);
+              
               addMessage('assistant', '⏳ 请批准下方工具调用');
+              
               const dialog = document.createElement('div');
               dialog.className = 'permission-dialog';
               dialog.innerHTML = '<div class="permission-dialog-title">请求使用工具</div><div class="permission-dialog-tool">' + escapeHtml(toolName) + '</div>' + (toolInputShort ? '<div class="permission-dialog-input">' + escapeHtml(toolInputShort) + '</div>' : '') + '<div class="permission-dialog-actions"><button class="primary" data-allow="1">允许</button><button class="secondary" data-allow="0">拒绝</button></div>';
+              
               const doResponse = async (allowed) => {
                 dialog.remove();
-                const permUrl = api + '/sessions/' + sessionId + '/permissions/' + encodeURIComponent(reqId) + '?userId=' + encodeURIComponent(userId);
-                const res = await fetch(permUrl, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(allowed ? { approved: true } : { approved: false, message: '用户拒绝' }),
-                });
-                if (res.ok) log(allowed ? '已允许: ' + toolName : '已拒绝: ' + toolName);
-                else log('响应权限失败: ' + (await res.text()), true);
+                const permUrl = api + approvalUrl + '?userId=' + encodeURIComponent(userId);
+                try {
+                  const res = await fetch(permUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(allowed ? { approved: true } : { approved: false, message: '用户拒绝' }),
+                  });
+                  if (res.ok) {
+                    log(allowed ? '已允许: ' + toolName : '已拒绝: ' + toolName);
+                    // Reconnect to stream to continue (no message - just continue conversation)
+                    log('重新连接流...');
+                    streamMessage(null).then(resolve).catch(reject);
+                  } else {
+                    log('响应权限失败: ' + (await res.text()), true);
+                    reject(new Error('权限响应失败'));
+                  }
+                } catch (e) {
+                  log('权限请求失败: ' + e.message, true);
+                  reject(e);
+                }
               };
+              
               dialog.querySelector('[data-allow="1"]').addEventListener('click', () => doResponse(true));
               dialog.querySelector('[data-allow="0"]').addEventListener('click', () => doResponse(false));
               document.getElementById('chatContainer').appendChild(dialog);
               return;
             }
+            
             if (chunk.type === 'text' && chunk.content) {
               fullContent += chunk.content;
               if (currentMessageEl) {
@@ -411,7 +440,6 @@
         };
       });
     }
-
     async function sendMessage() {
       const input = document.getElementById('messageInput');
       const message = input.value.trim();
