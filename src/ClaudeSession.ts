@@ -25,6 +25,8 @@ export interface ClaudeSessionOptions {
   canCallTool?: CanCallToolCallback;
   /** Timeout in ms for HTTP permission approval; used when canCallTool is not set. Default 300000 (5 min). */
   permissionTimeoutMs?: number;
+  /** Short timeout in ms for /stream to wait for permission before yielding waiting_for_permission. Default 30000 (30s). */
+  streamWaitForPermissionMs?: number;
   mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
   maxTurns?: number;
   envVars?: Record<string, string>;
@@ -83,6 +85,8 @@ export class ClaudeSession extends EventEmitter {
   private messages: Message[] = [];
   private pendingPermissions = new Map<string, PendingPermission>();
   private permissionTimeoutMs: number;
+  /** Short timeout for /stream to wait for permission before yielding waiting_for_permission */
+  readonly streamWaitForPermissionMs: number;
   private participants: Set<string> = new Set();
   private ownerId: string = '';
   private sessionContext?: SessionContext;
@@ -95,6 +99,7 @@ export class ClaudeSession extends EventEmitter {
     this.createdAt = new Date();
     this.claudeSessionId = options.id; // Use session ID as Claude session ID
     this.permissionTimeoutMs = options.permissionTimeoutMs ?? 300_000;
+    this.streamWaitForPermissionMs = options.streamWaitForPermissionMs ?? 30_000;
     this.ownerId = options.ownerId ?? '';
     for (const p of options.initialParticipants ?? []) {
       this.participants.add(p);
@@ -168,8 +173,20 @@ export class ClaudeSession extends EventEmitter {
   ): Promise<PermissionResult> {
     return new Promise<PermissionResult>((resolve, reject) => {
       const createdAt = new Date();
-      const timeoutHandle = setTimeout(() => {
-        if (this.pendingPermissions.delete(requestId)) {
+
+      // Short timeout for stream - after this, yield waiting_for_permission
+      // The permission remains pending and can be resolved later via HTTP
+      const streamTimeoutHandle = setTimeout(() => {
+        // Don't delete the pending permission - it stays pending
+        // Resolve with 'waiting' to let stream exit gracefully
+        resolve({ behavior: 'waiting', message: 'Stream timeout waiting for permission' });
+      }, this.streamWaitForPermissionMs);
+
+      // Long timeout - ultimate fallback to reject
+      const ultimateTimeoutHandle = setTimeout(() => {
+        if (this.pendingPermissions.has(requestId)) {
+          this.pendingPermissions.delete(requestId);
+          clearTimeout(streamTimeoutHandle);
           reject(new Error('Permission request timed out'));
         }
       }, this.permissionTimeoutMs);
@@ -179,11 +196,19 @@ export class ClaudeSession extends EventEmitter {
         toolName,
         input,
         createdAt,
-        resolve,
-        reject,
-        timeoutHandle,
+        resolve: (result) => {
+          clearTimeout(streamTimeoutHandle);
+          clearTimeout(ultimateTimeoutHandle);
+          resolve(result);
+        },
+        reject: (err) => {
+          clearTimeout(streamTimeoutHandle);
+          clearTimeout(ultimateTimeoutHandle);
+          reject(err);
+        },
+        timeoutHandle: ultimateTimeoutHandle,
       });
-      this.log.debug({ requestId, toolName }, 'Pending permission');
+      this.log.debug({ requestId, toolName, streamTimeout: this.streamWaitForPermissionMs }, 'Pending permission');
       // Notify SSE subscribers
       this.emit('permissionPending', { requestId, toolName, input, createdAt: createdAt.toISOString() });
       this._onPermissionPending?.();

@@ -55,6 +55,8 @@
 | `system` | 对应 system init：`subtype`、`session_id`、`model`、`cwd`、`tools` |
 | `log` | Claude 日志：`level`、`message` |
 
+工具调用区分：**请求**对应 `tool_start`（来自 assistant 消息的 `tool_use`），**结果**对应 `tool_output`（来自 CLI 下发的 user 消息中的 `tool_result` 块）。Stream 会将 user 消息里的每个 `tool_result` 转为 `tool_output` chunk，与 `tool_start` 通过 `toolUseId` 配对即可；当前不产出 `tool_end`，二者有一个即可。
+
 ### 3.2 单读循环与消费锁
 
 - **单读循环**：一个 session 一个 readline 循环，解析出的非 control 消息进入 `AsyncMessageQueue`，由 `query()` / `queryStream()` 消费。

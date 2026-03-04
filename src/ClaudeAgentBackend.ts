@@ -76,7 +76,7 @@ export interface RawHistoryEntry {
 
 /** Stream chunk types aligned with happy-cli message handling */
 export interface StreamChunk {
-  type: 'text' | 'tool_start' | 'tool_end' | 'tool_output' | 'error' | 'done' | 'system' | 'log' | 'permission_request';
+  type: 'text' | 'tool_start' | 'tool_end' | 'tool_output' | 'error' | 'done' | 'system' | 'log' | 'permission_request' | 'waiting_for_permission';
   content?: string;
   toolName?: string;
   toolInput?: unknown;
@@ -329,6 +329,14 @@ export class ClaudeAgentBackend extends EventEmitter {
               request.request.tool_name,
               request.request.input,
             );
+            // If response is 'waiting', the stream should exit gracefully
+            // Permission remains pending and can be resolved later via HTTP
+            if (response.behavior === 'waiting') {
+              log.info({ requestId: request.request_id }, 'Permission waiting - stream will exit');
+              // Emit event for queryStream to yield waiting_for_permission chunk
+              this.emit('permissionWaiting', { requestId: request.request_id });
+              return; // Don't send control_response, just exit
+            }
           } catch (err) {
             response = {
               behavior: 'deny',
@@ -615,10 +623,21 @@ export class ClaudeAgentBackend extends EventEmitter {
           this.once('permissionRequest', handler);
         });
 
-      const nextWithTimeout = (): Promise<SDKMessage | { type: 'permission_request'; requestId: string; toolName: string; input: unknown }> =>
+      // Create a promise that resolves when permission waiting times out
+      const waitForPermissionWaiting = (): Promise<{ type: 'waiting_for_permission'; requestId: string }> =>
+        new Promise((resolve) => {
+          const handler = (data: { requestId: string }) => {
+            this.off('permissionWaiting', handler);
+            resolve({ type: 'waiting_for_permission', ...data });
+          };
+          this.once('permissionWaiting', handler);
+        });
+
+      const nextWithTimeout = (): Promise<SDKMessage | { type: 'permission_request'; requestId: string; toolName: string; input: unknown } | { type: 'waiting_for_permission'; requestId: string }> =>
         Promise.race([
           this.messageQueue.next(),
           waitForPermissionRequest(),
+          waitForPermissionWaiting(),
           new Promise<never>((_, reject) => {
             timeoutHandle = setTimeout(() => reject(new Error('Timeout after 300s')), timeoutMs);
           }),
@@ -626,6 +645,18 @@ export class ClaudeAgentBackend extends EventEmitter {
 
       while (true) {
         const msgOrEvent = await nextWithTimeout();
+
+        // Handle permission waiting timeout - stream should exit gracefully
+        if (msgOrEvent && typeof msgOrEvent === 'object' && 'type' in msgOrEvent && msgOrEvent.type === 'waiting_for_permission') {
+          const event = msgOrEvent as { type: 'waiting_for_permission'; requestId: string };
+          yield {
+            type: 'waiting_for_permission',
+            requestId: event.requestId,
+            content: 'Waiting for user permission. You can approve/deny via HTTP API.',
+          };
+          // Stream exits here - permission remains pending
+          return;
+        }
 
         // Handle permission request event from HTTP flow
         if (msgOrEvent && typeof msgOrEvent === 'object' && 'type' in msgOrEvent && msgOrEvent.type === 'permission_request') {
@@ -673,6 +704,16 @@ export class ClaudeAgentBackend extends EventEmitter {
               };
             } else if (content.type === 'tool_result') {
               yield { type: 'tool_output', toolOutput: content, toolUseId: (content as { tool_use_id?: string }).tool_use_id };
+            }
+          }
+        } else if (msg.type === 'user') {
+          const userMsg = msg as SDKUserMessage;
+          const content = userMsg.message?.content;
+          const items = Array.isArray(content) ? content : [];
+          for (const block of items) {
+            if (block && typeof block === 'object' && (block as { type?: string }).type === 'tool_result') {
+              const toolResultBlock = block as { tool_use_id?: string; [key: string]: unknown };
+              yield { type: 'tool_output', toolOutput: block, toolUseId: toolResultBlock.tool_use_id };
             }
           }
         } else if (msg.type === 'result') {
