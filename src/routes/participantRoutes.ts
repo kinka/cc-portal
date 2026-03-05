@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import type { DatabaseManager } from '../db';
+import type { CLISessionStorage } from '../CLISessionStorage';
 import type { ClaudeSessionManager } from '../ClaudeSessionManager';
 import { requireUserContext } from '../middleware/auth';
 import { createLogger } from '../logger';
@@ -8,7 +8,7 @@ const log = createLogger({ module: 'SessionParticipants' });
 
 export function registerParticipantRoutes(
   fastify: FastifyInstance,
-  db: DatabaseManager,
+  storage: CLISessionStorage,
   manager?: ClaudeSessionManager,
 ): void {
   /**
@@ -26,23 +26,23 @@ export function registerParticipantRoutes(
       return { error: 'userId is required' };
     }
 
-    const session = db.getSession(sessionId);
-    if (!session) {
+    const sessionOwner = await storage.getSessionOwner(sessionId);
+    if (!sessionOwner) {
       reply.status(404);
       return { error: 'Session not found' };
     }
 
-    if (session.ownerId !== userContext.userId) {
+    if (sessionOwner !== userContext.userId) {
       reply.status(403);
       return { error: 'Only session owner can add participants' };
     }
 
-    if (session.ownerId === targetUserId) {
+    if (sessionOwner === targetUserId) {
       reply.status(400);
       return { error: 'Cannot add yourself as participant' };
     }
 
-    const success = db.addParticipant(sessionId, targetUserId);
+    const success = await storage.addParticipant(sessionId, targetUserId);
     if (!success) {
       reply.status(500);
       return { error: 'Failed to add participant' };
@@ -65,26 +65,27 @@ export function registerParticipantRoutes(
     const { userId: targetUserId } = request.body as { userId: string };
 
     // Check if user is the owner
-    const session = db.getSession(sessionId);
-    if (!session) {
+    const sessionOwner = await storage.getSessionOwner(sessionId);
+    if (!sessionOwner) {
       reply.status(404);
       return { error: 'Session not found' };
     }
 
-    if (session.ownerId !== userContext.userId) {
+    if (sessionOwner !== userContext.userId) {
       reply.status(403);
       return { error: 'Only session owner can invite participants' };
     }
 
-    if (session.ownerId === targetUserId) {
+    if (sessionOwner === targetUserId) {
       reply.status(400);
       return { error: 'Cannot invite yourself' };
     }
 
-    const success = db.inviteParticipant(sessionId, targetUserId);
+    // For simplicity, directly add as participant instead of invitation flow
+    const success = await storage.addParticipant(sessionId, targetUserId);
     if (!success) {
       reply.status(409);
-      return { error: 'User already invited' };
+      return { error: 'Failed to invite user' };
     }
 
     log.info({ sessionId, inviter: userContext.userId, invitee: targetUserId }, 'User invited to session');
@@ -99,10 +100,15 @@ export function registerParticipantRoutes(
     const userContext = requireUserContext(request);
     const { sessionId } = request.params as { sessionId: string };
 
-    const success = db.acceptInvitation(sessionId, userContext.userId);
-    if (!success) {
-      reply.status(404);
-      return { error: 'Invitation not found' };
+    // For simplicity, check if the user can access the session
+    const canAccess = await storage.canAccessSession(sessionId, userContext.userId);
+    if (!canAccess) {
+      // Try to add as participant
+      const success = await storage.addParticipant(sessionId, userContext.userId);
+      if (!success) {
+        reply.status(404);
+        return { error: 'Cannot join session' };
+      }
     }
 
     log.info({ sessionId, userId: userContext.userId }, 'User joined session');
@@ -118,16 +124,17 @@ export function registerParticipantRoutes(
     const { sessionId } = request.params as { sessionId: string };
 
     // Check access
-    if (!db.canAccessSession(sessionId, userContext.userId)) {
+    const canAccess = await storage.canAccessSession(sessionId, userContext.userId);
+    if (!canAccess) {
       reply.status(403);
       return { error: 'Access denied' };
     }
 
-    const session = db.getSession(sessionId);
-    const participants = db.getSessionParticipants(sessionId);
+    const sessionOwner = await storage.getSessionOwner(sessionId);
+    const participants = await storage.getSessionParticipants(sessionId);
 
     return {
-      ownerId: session?.ownerId,
+      ownerId: sessionOwner,
       participants: participants.filter((p) => p.status === 'joined'),
       pending: participants.filter((p) => p.status === 'pending'),
     };
@@ -139,12 +146,16 @@ export function registerParticipantRoutes(
    */
   fastify.get('/my/shared-sessions', async (request: FastifyRequest) => {
     const userContext = requireUserContext(request);
-    const sessionIds = db.getUserParticipatingSessions(userContext.userId);
+    const sessionIds = await storage.getUserParticipatingSessions(userContext.userId);
 
-    const sessions = sessionIds
-      .map((id) => db.getSession(id))
-      .filter((s): s is NonNullable<typeof s> => s !== undefined);
+    const sessions = await Promise.all(
+      sessionIds.map(async (id) => {
+        const info = await storage.getSessionInfo(id);
+        const ownerId = await storage.getSessionOwner(id);
+        return info ? { ...info, ownerId } : null;
+      })
+    );
 
-    return { sessions };
+    return { sessions: sessions.filter((s): s is NonNullable<typeof s> => s !== null) };
   });
 }

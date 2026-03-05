@@ -1,7 +1,7 @@
 import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyReply } from 'fastify';
 import { realpathSync } from 'node:fs';
 import { ClaudeSessionManager } from './ClaudeSessionManager';
-import { DatabaseManager } from './db';
+import { CLISessionStorage } from './CLISessionStorage';
 import type { PermissionResult } from './sdk-types';
 import { logger, isDev } from './logger';
 import { registerAuthMiddleware, requireUserContext } from './middleware/auth';
@@ -9,9 +9,10 @@ import { registerAdminRoutes } from './admin-routes';
 import { UserDirectory } from './crossSession/UserDirectory';
 import { registerCrossUserRoutes } from './routes/crossUserRoutes';
 import { registerParticipantRoutes } from './routes/participantRoutes';
+
 interface BuildAppOptions {
   sessionManager?: ClaudeSessionManager;
-  db?: DatabaseManager;
+  storage?: CLISessionStorage;
 }
 
 export function buildApp(options?: BuildAppOptions): FastifyInstance {
@@ -20,7 +21,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
   }
 
   const manager = options.sessionManager;
-  const db = options.db;
+  const storage = options.storage;
 
   const userDirectory = new UserDirectory();
 
@@ -56,19 +57,19 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
     reply.status(204).send();
   });
 
-  if (db) {
+  if (storage) {
     registerAuthMiddleware(fastify, {
-      db,
+      storage,
       defaultMaxSessions: parseInt(process.env.DEFAULT_MAX_SESSIONS || '200', 10),
     });
-    registerAdminRoutes(fastify, db);
+    registerAdminRoutes(fastify, storage);
   }
 
   registerCrossUserRoutes(fastify, userDirectory);
 
   // Register participant routes
-  if (db) {
-    registerParticipantRoutes(fastify, db, manager ?? undefined);
+  if (storage && manager) {
+    registerParticipantRoutes(fastify, storage, manager);
   }
 
   fastify.get('/health', async () => {
@@ -76,13 +77,14 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
   });
 
   fastify.get('/sessions', async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!db || !manager) {
+    if (!storage || !manager) {
       reply.status(503);
       return { error: 'Service not fully initialized' };
     }
 
     const userContext = requireUserContext(request);
-    const sessions = manager.listSessions(userContext.userId);
+    const sessions = await manager.listSessions(userContext.userId);
+    const used = await manager.getUserSessionCount(userContext.userId);
 
     return {
       sessions: sessions.map((s) => ({
@@ -92,13 +94,13 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
       })),
       quota: {
         max: userContext.maxSessions,
-        used: manager.getUserSessionCount(userContext.userId),
+        used,
       },
     };
   });
 
   fastify.post('/sessions', async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!db || !manager) {
+    if (!storage || !manager) {
       reply.status(503);
       return { error: 'Service not fully initialized' };
     }
@@ -127,8 +129,8 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
     const ownerId = body.ownerId ?? userContext.userId;
 
     try {
-      const currentCount = manager.getUserSessionCount(ownerId);
-      const targetUser = db.getUser(ownerId);
+      const currentCount = await manager.getUserSessionCount(ownerId);
+      const targetUser = await storage.getUser(ownerId);
       const maxSessions = targetUser?.maxSessions ?? userContext.maxSessions;
       if (currentCount >= maxSessions) {
         reply.status(429);
@@ -185,7 +187,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
   });
 
   fastify.get('/sessions/:sessionId', async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!manager || !db) {
+    if (!manager || !storage) {
       reply.status(503);
       return { error: 'Service not fully initialized' };
     }
@@ -210,7 +212,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
   });
 
   fastify.post('/sessions/:sessionId/messages', async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!manager || !db) {
+    if (!manager || !storage) {
       reply.status(503);
       return { error: 'Service not fully initialized' };
     }
@@ -222,15 +224,15 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
     const session = await manager.getSession(sessionId, userContext.userId);
     if (!session) {
       // Debug: check if session exists but user doesn't have access
-      const dbSession = db.getSession(sessionId);
-      if (dbSession) {
+      const sessionOwner = await storage.getSessionOwner(sessionId);
+      if (sessionOwner) {
         return {
           error: 'Session not found or access denied',
           debug: {
             sessionExists: true,
-            sessionOwner: dbSession.ownerId,
+            sessionOwner,
             requestingUser: userContext.userId,
-            isOwner: dbSession.ownerId === userContext.userId,
+            isOwner: sessionOwner === userContext.userId,
           },
         };
       }
@@ -259,7 +261,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
    * - limit: max number of messages to return (default: all)
    */
   fastify.get('/sessions/:sessionId/messages', async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!manager || !db) {
+    if (!manager || !storage) {
       reply.status(503);
       return { error: 'Service not fully initialized' };
     }
@@ -449,7 +451,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
       return { error: 'Session not found or access denied' };
     }
 
-    // Stop the session by destroying it (keeps DB record but kills the process)
+    // Stop the session by destroying it (keeps CLI record but kills the process)
     session.destroy();
     return { sessionId, status: 'stopped' };
   });
@@ -463,7 +465,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
     const userContext = requireUserContext(request);
     const { sessionId } = request.params as { sessionId: string };
 
-    const success = manager.deleteSession(sessionId, userContext.userId);
+    const success = await manager.deleteSession(sessionId, userContext.userId);
     if (!success) {
       reply.status(404);
       return { error: 'Session not found or access denied' };
@@ -482,15 +484,15 @@ export function buildLegacyApp(): FastifyInstance {
     genReqId: () => crypto.randomUUID(),
   });
 
-  const db = new DatabaseManager(':memory:');
-  const manager = new ClaudeSessionManager(db, { usersDir: './test-users' });
+  const storage = new CLISessionStorage('./test-users');
+  const manager = new ClaudeSessionManager(storage, { usersDir: './test-users' });
 
   fastify.get('/health', async () => {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
 
   fastify.get('/sessions', async () => {
-    const sessions = manager.listSessions('legacy');
+    const sessions = await manager.listSessions('legacy');
     return {
       sessions: sessions.map((s) => ({
         sessionId: s.id,
@@ -732,7 +734,7 @@ export function buildLegacyApp(): FastifyInstance {
       return { error: 'Session not found' };
     }
 
-    manager.deleteSession(sessionId, 'legacy');
+    await manager.deleteSession(sessionId, 'legacy');
     return { sessionId, status: 'deleted' };
   });
 

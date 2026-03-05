@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import type { DatabaseManager } from './db';
+import type { CLISessionStorage } from './CLISessionStorage';
 import { createLogger } from './logger';
 
 const log = createLogger({ module: 'AdminRoutes' });
 
-export function registerAdminRoutes(fastify: FastifyInstance, db: DatabaseManager) {
+export function registerAdminRoutes(fastify: FastifyInstance, storage: CLISessionStorage) {
   const adminToken = process.env.ADMIN_TOKEN || 'change-me-in-production';
 
   // Admin authentication middleware
@@ -21,102 +21,46 @@ export function registerAdminRoutes(fastify: FastifyInstance, db: DatabaseManage
     }
   });
 
-  // GET /admin/users - List all users with quota info
+  // GET /admin/users - List all users
   fastify.get('/admin/users', async () => {
-    const users = db.listUsers();
+    const users = await storage.listUsers();
     const result = [];
 
     for (const user of users) {
-      const sessionCount = db.getUserSessionCount(user.id);
+      const sessionCount = await storage.getUserSessionCount(user.id);
       result.push({
         userId: user.id,
         maxSessions: user.maxSessions,
         activeSessions: sessionCount,
-        createdAt: user.createdAt,
       });
     }
 
     return { users: result };
   });
 
-  // PUT /admin/users/:userId/quota - Update user quota
-  fastify.put('/admin/users/:userId/quota', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.params as { userId: string };
-    const body = request.body as { maxSessions?: number };
-
-    if (typeof body.maxSessions !== 'number' || body.maxSessions < 1) {
-      reply.status(400);
-      return { error: 'Invalid maxSessions value' };
-    }
-
-    const updated = db.updateUserQuota(userId, body.maxSessions);
-
-    if (!updated) {
-      reply.status(404);
-      return { error: 'User not found' };
-    }
-
-    log.info({ userId, maxSessions: body.maxSessions }, 'User quota updated');
-
-    return {
-      userId,
-      maxSessions: body.maxSessions,
-      updated: true,
-    };
-  });
-
-  // DELETE /admin/users/:userId - Delete user and associated data
-  fastify.delete('/admin/users/:userId', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.params as { userId: string };
-
-    // Check if user exists
-    const user = db.getUser(userId);
-    if (!user) {
-      reply.status(404);
-      return { error: 'User not found' };
-    }
-
-    // Note: We don't stop running sessions here - they will be cleaned up
-    // when the service restarts or when the SessionManager notices they're gone
-
-    const deleted = db.deleteUser(userId);
-
-    if (!deleted) {
-      reply.status(500);
-      return { error: 'Failed to delete user' };
-    }
-
-    log.info({ userId }, 'User deleted');
-
-    return {
-      userId,
-      deleted: true,
-    };
-  });
-
-  // GET /admin/sessions - List all sessions
+  // GET /admin/sessions - List all sessions from CLI storage
   fastify.get('/admin/sessions', async () => {
-    const sessions = db.listAllSessions();
-    return {
-      sessions: sessions.map((s) => ({
-        sessionId: s.id,
-        ownerId: s.ownerId,
-        path: s.path,
-        model: s.model,
-        status: s.status,
-        createdAt: s.createdAt,
-        updatedAt: s.updatedAt,
-      })),
-    };
+    const sessions = await storage.discoverSessions();
+    const userSessions: Array<{ sessionId: string; ownerId?: string; projectPath: string; lastModified: string; createdAt: string }> = [];
+    
+    for (const session of sessions) {
+      const ownerId = await storage.getSessionOwner(session.id);
+      userSessions.push({
+        sessionId: session.id,
+        ownerId,
+        projectPath: session.projectPath,
+        lastModified: session.lastModified.toISOString(),
+        createdAt: session.createdAt.toISOString(),
+      });
+    }
+    
+    return { sessions: userSessions };
   });
 
   // GET /admin/stats - Service statistics
   fastify.get('/admin/stats', async () => {
-    const users = db.listUsers();
-    const sessions = db.listAllSessions();
-
-    const activeSessions = sessions.filter((s) => s.status === 'active');
-    const stoppedSessions = sessions.filter((s) => s.status === 'stopped');
+    const users = await storage.listUsers();
+    const sessions = await storage.discoverSessions();
 
     return {
       users: {
@@ -124,8 +68,11 @@ export function registerAdminRoutes(fastify: FastifyInstance, db: DatabaseManage
       },
       sessions: {
         total: sessions.length,
-        active: activeSessions.length,
-        stopped: stoppedSessions.length,
+        byProject: sessions.reduce((acc, s) => {
+          const path = s.projectPath;
+          acc[path] = (acc[path] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>),
       },
     };
   });

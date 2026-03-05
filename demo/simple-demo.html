@@ -444,7 +444,7 @@
     let currentSessions = [];
     let isStreaming = false;
     let messageHistory = [];
-    
+    let mcpServers = {};  // MCP 服务配置
     // Set the user input field if user is specified in URL
     if (urlUser) {
       document.getElementById('currentUser').value = urlUser;

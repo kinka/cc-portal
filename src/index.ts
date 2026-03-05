@@ -1,29 +1,24 @@
 import { buildApp } from './app';
 import { ClaudeSessionManager } from './ClaudeSessionManager';
-import { DatabaseManager } from './db';
+import { CLISessionStorage } from './CLISessionStorage';
 import { logger } from './logger';
-import { mkdir } from 'node:fs/promises';
-import { dirname } from 'node:path';
 
 const start = async () => {
-  // Ensure database directory exists
-  const dbPath = process.env.DATABASE_URL || './data/app.db';
-  await mkdir(dirname(dbPath), { recursive: true });
-
-  // Initialize database
-  const db = new DatabaseManager(dbPath);
-
   const port = parseInt(process.env.PORT || '3333', 10);
   const agentApiBaseUrl = process.env.CC_AGENTS_URL || `http://localhost:${port}`;
+  const usersDir = process.env.USERS_DIR || './users';
 
-  // Initialize session manager
-  const manager = new ClaudeSessionManager(db, {
-    usersDir: process.env.USERS_DIR || './users',
+  // Initialize CLI-based storage (replaces database)
+  const storage = new CLISessionStorage(usersDir);
+
+  // Initialize session manager with CLI storage
+  const manager = new ClaudeSessionManager(storage, {
+    usersDir,
     agentApiBaseUrl,
   });
 
-  // Build Fastify app with database and session manager
-  const fastify = buildApp({ sessionManager: manager, db });
+  // Build Fastify app with CLI storage and session manager
+  const fastify = buildApp({ sessionManager: manager, storage });
 
   const startServer = async () => {
     try {
@@ -40,7 +35,6 @@ const start = async () => {
       logger.info('  GET  /sessions/:id/stream                  - Stream message (SSE)');
       logger.info('  GET  /sessions/:id/pending-permissions     - List pending approvals (SSE with ?stream=1)');
       logger.info('  POST /sessions/:id/permissions/:requestId  - Approve/deny tool');
-      // logger.info('  POST /sessions/:id/stop                    - Stop session'); // Removed: sessions auto-resume via session-id
       logger.info('  DELETE /sessions/:id                       - Delete session');
       logger.info('');
       logger.info('Admin endpoints (requires X-Admin-Token):');
@@ -49,6 +43,8 @@ const start = async () => {
       logger.info('  DELETE /admin/users/:userId                - Delete user');
       logger.info('  GET  /admin/sessions                       - List all sessions');
       logger.info('  GET  /admin/stats                          - Service statistics');
+      logger.info('');
+      logger.info('Session storage: CLI-based (~/.claude/projects/)');
     } catch (err) {
       logger.error({ err: String(err) }, 'Failed to start server');
       process.exit(1);
@@ -60,7 +56,6 @@ const start = async () => {
     logger.info('SIGTERM received, shutting down gracefully');
     manager.destroyAllSessions();
     await fastify.close();
-    db.close();
     process.exit(0);
   });
 
@@ -68,7 +63,6 @@ const start = async () => {
     logger.info('SIGINT received, shutting down gracefully');
     manager.destroyAllSessions();
     await fastify.close();
-    db.close();
     process.exit(0);
   });
 

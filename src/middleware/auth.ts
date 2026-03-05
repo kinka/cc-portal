@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import type { DatabaseManager } from '../db';
+import type { CLISessionStorage } from '../CLISessionStorage';
 import { createLogger } from '../logger';
 
 const log = createLogger({ module: 'Auth' });
@@ -14,12 +14,12 @@ declare module 'fastify' {
 }
 
 interface AuthOptions {
-  db: DatabaseManager;
+  storage: CLISessionStorage;
   defaultMaxSessions?: number;
 }
 
 export function registerAuthMiddleware(fastify: FastifyInstance, options: AuthOptions) {
-  const { db, defaultMaxSessions = 200 } = options;
+  const { storage } = options;
 
 fastify.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
     // Skip auth for health check, admin routes, and OPTIONS (CORS preflight)
@@ -37,7 +37,7 @@ fastify.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply
     }
 
     // Get or create user
-    const user = db.getOrCreateUser(userId, defaultMaxSessions);
+    const user = await storage.getOrCreateUser(userId);
 
     // Inject user context into request
     request.userContext = {

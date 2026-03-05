@@ -3,8 +3,8 @@ import { mkdir, writeFile, access, cp } from 'node:fs/promises';
 import { resolve, normalize, isAbsolute, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ClaudeSession } from './ClaudeSession';
+import { CLISessionStorage } from './CLISessionStorage';
 import { createLogger } from './logger';
-import type { DatabaseManager } from './db';
 
 const log = createLogger({ module: 'SessionManager' });
 
@@ -52,20 +52,29 @@ interface ActiveSessionEntry {
   };
 }
 
+/**
+ * ClaudeSessionManager - CLI-based session management
+ * 
+ * Sessions are stored in Claude Code CLI's storage (~/.claude/projects/)
+ * and this manager keeps lightweight mappings for user ownership and participants.
+ */
 export class ClaudeSessionManager {
   private sessions = new Map<string, ActiveSessionEntry>();
+  private storage: CLISessionStorage;
   private usersDir: string;
   private agentApiBaseUrl?: string;
   private sessionLoadingLocks = new Map<string, Promise<ClaudeSession | undefined>>();
   private usersDirInitialized = false;
 
   constructor(
-    private db: DatabaseManager,
+    storage: CLISessionStorage,
     options: { usersDir?: string; agentApiBaseUrl?: string } = {}
   ) {
+    this.storage = storage;
     this.usersDir = resolve(options.usersDir || process.env.USERS_DIR || './users');
     this.agentApiBaseUrl = options.agentApiBaseUrl;
-    this.loadActiveSessionsFromDb();
+    // Initialize storage async
+    this.storage.initialize().catch(err => log.error({ err }, 'Failed to initialize storage'));
   }
 
   /**
@@ -96,24 +105,6 @@ export class ClaudeSessionManager {
     }
 
     this.usersDirInitialized = true;
-  }
-
-  private loadActiveSessionsFromDb() {
-    const activeSessions = this.db.getActiveSessions();
-    for (const metadata of activeSessions) {
-      this.sessions.set(metadata.id, {
-        session: null as unknown as ClaudeSession,
-        ownerId: metadata.ownerId,
-        metadata: {
-          id: metadata.id,
-          path: metadata.path,
-          model: metadata.model,
-          createdAt: metadata.createdAt,
-          updatedAt: metadata.updatedAt,
-        },
-      });
-    }
-    log.info({ count: activeSessions.length }, 'Loaded active sessions from database');
   }
 
   private async resolveUserPath(ownerId: string, path?: string): Promise<string> {
@@ -169,9 +160,10 @@ export class ClaudeSessionManager {
   async createSession(options: CreateSessionOptions): Promise<ClaudeSession> {
     const { ownerId } = options;
 
-    const userSessionCount = this.db.getUserSessionCount(ownerId);
-    const user = this.db.getUser(ownerId);
-    const maxSessions = user?.maxSessions || 200;
+    // Ensure user exists and check quota
+    const user = await this.storage.getOrCreateUser(ownerId);
+    const userSessionCount = await this.storage.getUserSessionCount(ownerId);
+    const maxSessions = user.maxSessions;
 
     if (userSessionCount >= maxSessions) {
       throw new Error(`Session quota exceeded. Max ${maxSessions} sessions allowed.`);
@@ -180,12 +172,8 @@ export class ClaudeSessionManager {
     const sessionId = randomUUID();
     const resolvedPath = await this.resolveUserPath(ownerId, options.path);
 
-    this.db.createSession(
-      sessionId,
-      ownerId,
-      resolvedPath,
-      options.model
-    );
+    // Register session in cache for immediate access
+    this.storage.registerSession(sessionId, ownerId, resolvedPath);
 
     try {
       const session = new ClaudeSession({
@@ -224,7 +212,7 @@ export class ClaudeSessionManager {
 
       return session;
     } catch (error) {
-      this.db.deleteSession(sessionId);
+      this.storage.unregisterSession(sessionId);
       throw error;
     }
   }
@@ -237,7 +225,8 @@ export class ClaudeSessionManager {
 
   async getSession(sessionId: string, userId: string): Promise<ClaudeSession | undefined> {
     // Check if user can access this session (owner or participant)
-    if (!this.db.canAccessSession(sessionId, userId)) {
+    const canAccess = await this.storage.canAccessSession(sessionId, userId);
+    if (!canAccess) {
       return undefined;
     }
 
@@ -257,32 +246,21 @@ export class ClaudeSessionManager {
       return existingLock;
     }
 
-    // Need to lazy load
-    let loadPromise: Promise<ClaudeSession | undefined>;
-
-    const dbSession = this.db.getSession(sessionId);
-    if (!dbSession) {
+    // Need to lazy load - check if session exists in CLI storage
+    const sessionExists = await this.storage.sessionExists(sessionId);
+    if (!sessionExists) {
       return undefined;
     }
 
-    if (!entry) {
-      // Load from database
-      loadPromise = Promise.resolve(this.lazyLoadSession({ ...dbSession, status: 'active' }));
-      this.db.updateSessionStatus(sessionId, 'active');
-    } else {
-      // Entry exists but session not loaded
-      loadPromise = Promise.resolve(this.lazyLoadSession({
-        id: entry.metadata.id,
-        ownerId: dbSession.ownerId,
-        path: entry.metadata.path,
-        model: entry.metadata.model,
-        status: 'active',
-        createdAt: entry.metadata.createdAt,
-        updatedAt: entry.metadata.updatedAt,
-      }));
-    }
+    const ownerId = await this.storage.getSessionOwner(sessionId);
 
-    // Store the lock
+    // Lazy load from CLI
+    const loadPromise = this.lazyLoadSession({
+      id: sessionId,
+      ownerId: ownerId || 'unknown',
+      path: '', // Will be determined from CLI storage
+    });
+    
     this.sessionLoadingLocks.set(sessionId, loadPromise);
     loadPromise.finally(() => this.sessionLoadingLocks.delete(sessionId));
 
@@ -294,17 +272,16 @@ export class ClaudeSessionManager {
     id: string;
     ownerId: string;
     path: string;
-    model?: string;
-    status: 'active' | 'stopped' | 'error';
-    createdAt: string;
-    updatedAt: string;
   }): Promise<ClaudeSession> {
-    log.info({ sessionId: metadata.id, ownerId: metadata.ownerId }, 'Lazy loading session from database');
+    log.info({ sessionId: metadata.id, ownerId: metadata.ownerId }, 'Lazy loading session from CLI storage');
+
+    // Get session info from CLI storage
+    const sessionInfo = await this.storage.getSessionInfo(metadata.id);
+    const resolvedPath = sessionInfo?.projectPath || metadata.path || process.cwd();
 
     const session = new ClaudeSession({
       id: metadata.id,
-      path: metadata.path,
-      model: metadata.model,
+      path: resolvedPath,
       isNewSession: false,
     });
 
@@ -316,42 +293,42 @@ export class ClaudeSessionManager {
       ownerId: metadata.ownerId,
       metadata: {
         id: metadata.id,
-        path: metadata.path,
-        model: metadata.model,
-        createdAt: metadata.createdAt,
-        updatedAt: new Date().toISOString(),
+        path: resolvedPath,
+        createdAt: sessionInfo?.createdAt?.toISOString() || new Date().toISOString(),
+        updatedAt: sessionInfo?.lastModified?.toISOString() || new Date().toISOString(),
       },
     });
 
     return session;
   }
 
-  listSessions(userId: string): SessionInfo[] {
-    const dbSessions = this.db.listUserSessions(userId);
-    return dbSessions.map((s) => ({
+  async listSessions(userId: string): Promise<SessionInfo[]> {
+    const userSessions = await this.storage.listUserSessions(userId);
+    
+    return userSessions.map(s => ({
       id: s.id,
-      path: s.path,
-      createdAt: s.createdAt,
+      path: s.path || '',
+      createdAt: new Date().toISOString(),
       ownerId: s.ownerId,
     }));
   }
 
-  deleteSession(sessionId: string, userId: string): boolean {
+  async deleteSession(sessionId: string, userId: string): Promise<boolean> {
     const entry = this.sessions.get(sessionId);
+    const ownerId = await this.storage.getSessionOwner(sessionId);
 
-    if (!entry || entry.ownerId !== userId) {
-      const dbSession = this.db.getSession(sessionId);
-      if (!dbSession || dbSession.ownerId !== userId) {
-        return false;
-      }
+    // Check ownership
+    if (ownerId !== userId) {
+      return false;
     }
 
+    // Destroy the process
     if (entry?.session && entry.session instanceof ClaudeSession) {
       entry.session.destroy();
     }
 
     this.sessions.delete(sessionId);
-    this.db.deleteSession(sessionId);
+    this.storage.unregisterSession(sessionId);
 
     log.info({ sessionId, userId }, 'Session deleted');
     return true;
@@ -366,16 +343,30 @@ export class ClaudeSessionManager {
     log.info('All sessions destroyed');
   }
 
-  getUserSessionCount(userId: string): number {
-    return this.db.getUserSessionCount(userId);
+  async getUserSessionCount(userId: string): Promise<number> {
+    return this.storage.getUserSessionCount(userId);
   }
 
-  isSessionOwner(sessionId: string, userId: string): boolean {
-    const entry = this.sessions.get(sessionId);
-    if (entry) {
-      return entry.ownerId === userId;
+  async isSessionOwner(sessionId: string, userId: string): Promise<boolean> {
+    const ownerId = await this.storage.getSessionOwner(sessionId);
+    return ownerId === userId;
+  }
+
+  /**
+   * Add a participant to a session
+   */
+  async addParticipant(sessionId: string, userId: string): Promise<boolean> {
+    const session = this.sessions.get(sessionId)?.session;
+    if (session instanceof ClaudeSession) {
+      session.addParticipant(userId);
     }
-    const dbSession = this.db.getSession(sessionId);
-    return dbSession?.ownerId === userId;
+    return this.storage.addParticipant(sessionId, userId);
+  }
+
+  /**
+   * Get participants of a session
+   */
+  async getSessionParticipants(sessionId: string): Promise<Array<{ userId: string; status: string; joinedAt?: string }>> {
+    return this.storage.getSessionParticipants(sessionId);
   }
 }

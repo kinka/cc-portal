@@ -4,11 +4,10 @@ import { writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { buildApp } from './app';
-import { DatabaseManager } from './db';
+import { CLISessionStorage } from './CLISessionStorage';
 import { ClaudeSessionManager } from './ClaudeSessionManager';
 
 describe('ClaudeAgentBackend', () => {
-  describe('calculateProjectHash', () => {
     test('should calculate hash for simple path', () => {
       // The hash is the path components joined with '-' and prefixed with '-'
       const result = (ClaudeAgentBackend as any).calculateProjectHash('/Users/kinka/space');
@@ -338,10 +337,9 @@ describe('ClaudeAgentBackend', () => {
 
   describe('HTTP API - /sessions/:sessionId loads from CLI', () => {
     test('should load history from CLI storage by default', async () => {
-      const db = new DatabaseManager(':memory:');
-      const manager = new ClaudeSessionManager(db, { usersDir: './test-users' });
-      const app = buildApp({ sessionManager: manager, db });
-
+      const storage = new CLISessionStorage('./test-users');
+      const manager = new ClaudeSessionManager(storage, { usersDir: './test-users' });
+      const app = buildApp({ sessionManager: manager, storage });
       // Create session first and get the actual session ID
       const session = await manager.createSession({
         ownerId: 'test-user',
@@ -398,10 +396,9 @@ describe('ClaudeAgentBackend', () => {
     });
 
     test('should support detailed=true for full history with tool calls', async () => {
-      const db = new DatabaseManager(':memory:');
-      const manager = new ClaudeSessionManager(db, { usersDir: './test-users' });
-      const app = buildApp({ sessionManager: manager, db });
-
+      const storage = new CLISessionStorage('./test-users');
+      const manager = new ClaudeSessionManager(storage, { usersDir: './test-users' });
+      const app = buildApp({ sessionManager: manager, storage });
       // Create session first
       const session = await manager.createSession({
         ownerId: 'test-user',
@@ -464,6 +461,5 @@ describe('ClaudeAgentBackend', () => {
         }
         manager.deleteSession(testSessionId, 'test-user');
       }
-    });
   });
 });
