@@ -12,15 +12,16 @@
       color: #e2e8f0;
       min-height: 100vh;
     }
-    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .container { width: 100%; height: 100vh; display: flex; flex-direction: column; padding: 12px; overflow: hidden; }
     header {
       text-align: center;
-      padding: 20px 0;
+      padding: 8px 0;
       border-bottom: 1px solid #334155;
-      margin-bottom: 20px;
+      margin-bottom: 12px;
+      flex-shrink: 0;
     }
     h1 {
-      font-size: 1.8rem;
+      font-size: 1.4rem;
       background: linear-gradient(135deg, #60a5fa, #a78bfa);
       background-clip: text;
       -webkit-background-clip: text;
@@ -30,26 +31,27 @@
     /* 配置栏 */
     .config-panel {
       background: #1e293b;
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 20px;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 12px;
       border: 1px solid #334155;
+      flex-shrink: 0;
     }
     .config-row {
       display: flex;
-      gap: 16px;
+      gap: 12px;
       flex-wrap: wrap;
       align-items: center;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
     .config-row:last-child { margin-bottom: 0; }
     .config-item {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
     }
     .config-item label {
-      font-size: 0.875rem;
+      font-size: 0.8rem;
       color: #94a3b8;
       white-space: nowrap;
     }
@@ -57,25 +59,25 @@
       background: #0f172a;
       border: 1px solid #334155;
       color: #e2e8f0;
-      padding: 8px 12px;
-      border-radius: 6px;
-      font-size: 0.875rem;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.8rem;
     }
     .config-item input:focus, .config-item select:focus {
       outline: none;
       border-color: #60a5fa;
     }
-    .config-item input[type="text"] { width: 200px; }
+    .config-item input[type="text"] { width: 160px; }
     .btn {
-      padding: 8px 16px;
-      border-radius: 6px;
+      padding: 4px 10px;
+      border-radius: 4px;
       border: none;
-      font-size: 0.875rem;
+      font-size: 0.8rem;
       cursor: pointer;
       transition: all 0.2s;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 4px;
     }
     .btn-primary { background: #3b82f6; color: white; }
     .btn-primary:hover { background: #2563eb; }
@@ -89,35 +91,46 @@
     /* 主内容区 */
     .main-layout {
       display: grid;
-      grid-template-columns: 300px 1fr;
-      gap: 20px;
+      grid-template-columns: 240px 1fr;
+      gap: 12px;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
     }
 
     /* 侧边栏 */
     .sidebar {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 12px;
+      height: 100%;
+      min-height: 0;
     }
     .panel {
       background: #1e293b;
-      border-radius: 12px;
+      border-radius: 8px;
       border: 1px solid #334155;
-      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
     }
     .panel-header {
-      padding: 12px 16px;
+      padding: 8px 12px;
       background: #0f172a;
       border-bottom: 1px solid #334155;
       font-weight: 600;
+      font-size: 0.85rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-shrink: 0;
     }
     .panel-content {
-      padding: 12px;
-      max-height: 300px;
+      padding: 8px;
       overflow-y: auto;
+      flex: 1;
+      min-height: 0;
     }
 
     /* 用户列表 */
@@ -134,8 +147,28 @@
       background: rgba(59, 130, 246, 0.2);
       border-color: #3b82f6;
     }
-    .user-name { font-weight: 500; margin-bottom: 2px; }
+    .user-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2px;
+    }
+    .user-name { font-weight: 500; }
     .user-info { font-size: 0.75rem; color: #94a3b8; }
+    .btn-delete {
+      background: transparent;
+      border: none;
+      color: #64748b;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      line-height: 1;
+    }
+    .btn-delete:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+    }
 
     /* Session 列表 */
     .session-item {
@@ -154,14 +187,16 @@
     }
     .session-id { font-family: monospace; font-size: 0.8rem; color: #60a5fa; }
     .session-path { font-size: 0.75rem; color: #94a3b8; margin-top: 4px; }
+
     /* 聊天区 */
     .chat-container {
       background: #1e293b;
-      border-radius: 12px;
+      border-radius: 8px;
       border: 1px solid #334155;
       display: flex;
       flex-direction: column;
-      height: 600px;
+      height: 100%;
+      min-height: 0;
     }
     .chat-header {
       padding: 16px;
@@ -225,27 +260,30 @@
 
     /* 日志区 */
     .log-panel {
-      margin-top: 20px;
+      margin-top: 12px;
       background: #1e293b;
-      border-radius: 12px;
+      border-radius: 8px;
       border: 1px solid #334155;
       overflow: hidden;
+      flex-shrink: 0;
+      max-height: 150px;
     }
     .log-header {
-      padding: 12px 16px;
+      padding: 6px 12px;
       background: #0f172a;
       border-bottom: 1px solid #334155;
       font-weight: 600;
+      font-size: 0.8rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
     .log-content {
-      max-height: 200px;
+      max-height: 100px;
       overflow-y: auto;
-      padding: 12px;
+      padding: 8px;
       font-family: monospace;
-      font-size: 0.8rem;
+      font-size: 0.75rem;
     }
     .log-entry {
       padding: 4px 0;
@@ -261,10 +299,10 @@
     /* 空状态 */
     .empty-state {
       text-align: center;
-      padding: 40px;
+      padding: 20px;
       color: #64748b;
     }
-    .empty-state-icon { font-size: 3rem; margin-bottom: 12px; }
+    .empty-state-icon { font-size: 2rem; margin-bottom: 8px; }
 
     /* 工具调用显示 */
     .tool-call {
@@ -275,8 +313,23 @@
       border-radius: 0 8px 8px 0;
       font-size: 0.8rem;
     }
-    .tool-call-name { color: #22d3ee; font-weight: 500; }
-    .tool-call-input { color: #64748b; margin-top: 4px; }
+    .tool-call-name { color: #22d3ee; font-weight: 500; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .tool-call-name:hover { opacity: 0.8; }
+    .tool-call-name .expand-icon { font-size: 0.7rem; transition: transform 0.2s; }
+    .tool-call-name.collapsed .expand-icon { transform: rotate(-90deg); }
+    .tool-call-input { color: #64748b; margin-top: 4px; word-break: break-all; overflow: hidden; }
+    .tool-call-input.collapsed { max-height: 4.5em; }
+    .tool-call-input.expanded { max-height: none; }
+    .tool-result {
+      background: #1e3a3a;
+      border-left: 3px solid #22c55e;
+      padding: 8px 12px;
+      margin: 4px 0 8px 0;
+      border-radius: 0 8px 8px 0;
+      font-size: 0.8rem;
+    }
+    .tool-result .tool-call-name { color: #22c55e; }
+    .message-tools { font-size: 0.7rem; color: #64748b; margin-top: 4px; }
 
     @media (max-width: 768px) {
       .main-layout { grid-template-columns: 1fr; }
@@ -396,6 +449,16 @@
     if (urlUser) {
       document.getElementById('currentUser').value = urlUser;
     }
+    
+    // 更新 URL 参数（不刷新页面）
+    function updateUrlUser(userId) {
+      const url = new URL(window.location);
+      url.searchParams.set('user', userId);
+      window.history.replaceState({}, '', url);
+    }
+    
+    // 初始化时更新 URL
+    updateUrlUser(currentUserId);
 
 
     function getApiUrl() {
@@ -440,8 +503,11 @@
       }
       container.innerHTML = users.map(u => `
         <div class="user-item ${u.userId === currentUserId ? 'active' : ''}" onclick="selectUser('${u.userId}')">
-          <div class="user-name">👤 ${u.userId}</div>
-          <div class="user-info">配额: ${u.activeSessions || 0}/${u.maxSessions} sessions</div>
+          <div class="user-header">
+            <span class="user-name">👤 ${u.userId}</span>
+            <button class="btn-delete" onclick="event.stopPropagation(); deleteUser('${u.userId}')" title="删除用户">✕</button>
+          </div>
+          <div class="user-info">配额: ${u.activeSessions || 0}/${u.maxSessions}</div>
         </div>
       `).join('');
     }
@@ -452,10 +518,35 @@
       document.getElementById('currentUser').value = userId;
       currentSessionId = null;
       messageHistory = [];
+      updateUrlUser(userId);  // 更新 URL 参数
       updateChatUI();
       loadSessions();
       loadUsers();
       log(`切换到用户: ${userId}`, 'info');
+    }
+
+    // 删除用户
+    async function deleteUser(userId) {
+      if (userId === currentUserId) {
+        log('不能删除当前用户，请先切换到其他用户', 'error');
+        return;
+      }
+      
+      try {
+        log(`删除用户: ${userId}...`, 'warn');
+        const res = await fetch(`${getApiUrl()}/admin/users/${userId}?userId=${currentUserId}`, {
+          method: 'DELETE',
+          headers: { 'X-Admin-Token': 'change-me-in-production' }
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || res.status);
+        }
+        log(`用户 ${userId} 已删除`, 'success');
+        loadUsers();
+      } catch (e) {
+        log('删除用户失败: ' + e.message, 'error');
+      }
     }
 
     function switchUser() {
@@ -523,13 +614,13 @@
 
     async function loadSessionDetails(sessionId) {
       try {
-        // 使用 /sessions/:id/messages 端点加载历史消息
-        const res = await fetch(`${getApiUrl()}/sessions/${sessionId}/messages?userId=${currentUserId}`);
+        // 使用 /sessions/:id/messages 端点加载历史消息（detailed=1 包含工具调用）
+        const res = await fetch(`${getApiUrl()}/sessions/${sessionId}/messages?userId=${currentUserId}&detailed=1`);
         if (!res.ok) return;
         const data = await res.json();
         messageHistory = data.messages || [];
         renderMessages();
-        log(`加载了 ${messageHistory.length} 条历史消息`, 'success');
+        log(`加载了 ${messageHistory.length} 条历史消息 (详细模式: ${data.detailed})`, 'success');
       } catch (e) {
         log('加载消息历史失败: ' + e.message, 'error');
       }
@@ -541,19 +632,184 @@
         container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">💬</div><div>开始对话吧</div></div>';
         return;
       }
-      container.innerHTML = messageHistory.map(m => `
-        <div class="message message-${m.role}">
-          <div>${escapeHtml(m.content)}</div>
-          <div class="message-time">${new Date(m.timestamp).toLocaleTimeString('zh-CN')}</div>
-        </div>
-      `).join('');
+      
+      // 过滤掉空消息
+      const html = messageHistory.map(m => renderMessageItem(m)).filter(h => h).join('');
+      if (!html) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">💬</div><div>暂无对话内容</div></div>';
+        return;
+      }
+      container.innerHTML = html;
       container.scrollTop = container.scrollHeight;
+    }
+
+    function renderMessageItem(m) {
+      // 过滤掉不需要显示的消息类型
+      if (m.type === 'system' || m.type === 'result' || m.type === 'queue-operation') {
+        return '';
+      }
+      
+      // 工具调用 (type: 'tool_use')
+      if (m.type === 'tool_use' || (m.type === 'assistant' && m.tool_name)) {
+        const inputStr = m.tool_input ? JSON.stringify(m.tool_input, null, 2) : '';
+        const lines = inputStr.split('\n').length;
+        const needsCollapse = lines > 3;
+        return `
+          <div class="tool-call">
+            <div class="tool-call-name ${needsCollapse ? 'collapsed' : ''}" onclick="toggleToolCollapse(this)">
+              <span>🔧 ${m.tool_name || 'tool'}</span>
+              ${needsCollapse ? '<span class="expand-icon">▼</span>' : ''}
+            </div>
+            ${inputStr ? `<div class="tool-call-input ${needsCollapse ? 'collapsed' : 'expanded'}"><pre>${escapeHtml(inputStr)}</pre></div>` : ''}
+          </div>
+        `;
+      }
+      
+      // 工具结果 (type: 'tool_result')
+      if (m.type === 'tool_result' && m.tool_output !== undefined) {
+        const outputStr = typeof m.tool_output === 'string' ? m.tool_output : JSON.stringify(m.tool_output, null, 2);
+        const truncated = outputStr.length > 2000 ? outputStr.slice(0, 2000) + '...' : outputStr;
+        const lines = truncated.split('\n').length;
+        const needsCollapse = lines > 3;
+        return `
+          <div class="tool-result">
+            <div class="tool-call-name ${needsCollapse ? 'collapsed' : ''}" onclick="toggleToolCollapse(this)">
+              <span>✅ 工具结果</span>
+              ${needsCollapse ? '<span class="expand-icon">▼</span>' : ''}
+            </div>
+            <div class="tool-call-input ${needsCollapse ? 'collapsed' : 'expanded'}"><pre>${escapeHtml(truncated)}</pre></div>
+          </div>
+        `;
+      }
+      
+      // 用户消息 (type: 'user')
+      if (m.type === 'user' && m.message?.content) {
+        const contentArray = Array.isArray(m.message.content) ? m.message.content : null;
+        
+        // 检查是否是 tool_result
+        if (contentArray) {
+          const toolResult = contentArray.find(c => c.type === 'tool_result');
+          if (toolResult) {
+            const resultContent = toolResult.content;
+            let outputStr = '';
+            if (Array.isArray(resultContent)) {
+              outputStr = resultContent.map(c => c.text || JSON.stringify(c)).join('\n');
+            } else {
+              outputStr = typeof resultContent === 'string' ? resultContent : JSON.stringify(resultContent, null, 2);
+            }
+            const truncated = outputStr.length > 2000 ? outputStr.slice(0, 2000) + '...' : outputStr;
+            const lines = truncated.split('\n').length;
+            const needsCollapse = lines > 3;
+            return `
+              <div class="tool-result">
+                <div class="tool-call-name ${needsCollapse ? 'collapsed' : ''}" onclick="toggleToolCollapse(this)">
+                  <span>✅ 工具结果</span>
+                  ${needsCollapse ? '<span class="expand-icon">▼</span>' : ''}
+                </div>
+                <div class="tool-call-input ${needsCollapse ? 'collapsed' : 'expanded'}"><pre>${escapeHtml(truncated)}</pre></div>
+              </div>
+            `;
+          }
+        }
+        
+        // 普通用户消息
+        const content = typeof m.message.content === 'string' 
+          ? m.message.content 
+          : contentArray.map(c => c.text || '').join('');
+        return `
+          <div class="message message-user">
+            <div>${escapeHtml(content)}</div>
+            <div class="message-time">${m.timestamp ? new Date(m.timestamp).toLocaleTimeString('zh-CN') : ''}</div>
+          </div>
+        `;
+      }
+      
+      // 助手消息 (type: 'assistant') - 可能包含 thinking, text 和 tool_use
+      if (m.type === 'assistant' && m.message?.content) {
+        const contentArray = Array.isArray(m.message.content) ? m.message.content : [{ type: 'text', text: m.message.content }];
+        
+        // 处理 content 数组中的多个部分
+        const parts = contentArray.map(c => {
+          // thinking 类型
+          if (c.type === 'thinking' && c.thinking) {
+            const lines = c.thinking.split('\n').length;
+            const needsCollapse = lines > 3;
+            return `
+              <div class="tool-call" style="border-left-color: #a78bfa;">
+                <div class="tool-call-name ${needsCollapse ? 'collapsed' : ''}" style="color: #a78bfa;" onclick="toggleToolCollapse(this)">
+                  <span>💭 思考过程</span>
+                  ${needsCollapse ? '<span class="expand-icon">▼</span>' : ''}
+                </div>
+                <div class="tool-call-input ${needsCollapse ? 'collapsed' : 'expanded'}"><pre>${escapeHtml(c.thinking)}</pre></div>
+              </div>
+            `;
+          }
+          // 文本类型
+          if (c.type === 'text' && c.text) {
+            return `<div>${escapeHtml(c.text)}</div>`;
+          }
+          // 工具调用
+          if (c.type === 'tool_use' && c.name) {
+            const inputStr = c.input ? JSON.stringify(c.input, null, 2) : '';
+            const lines = inputStr.split('\n').length;
+            const needsCollapse = lines > 3;
+            return `
+              <div class="tool-call">
+                <div class="tool-call-name ${needsCollapse ? 'collapsed' : ''}" onclick="toggleToolCollapse(this)">
+                  <span>🔧 ${c.name}</span>
+                  ${needsCollapse ? '<span class="expand-icon">▼</span>' : ''}
+                </div>
+                ${inputStr ? `<div class="tool-call-input ${needsCollapse ? 'collapsed' : 'expanded'}"><pre>${escapeHtml(inputStr)}</pre></div>` : ''}
+              </div>
+            `;
+          }
+          return '';
+        }).join('');
+        
+        // 如果没有内容，跳过
+        if (!parts.trim()) return '';
+        
+        return `
+          <div class="message message-assistant">
+            ${parts}
+            <div class="message-time">${m.timestamp ? new Date(m.timestamp).toLocaleTimeString('zh-CN') : ''}</div>
+          </div>
+        `;
+      }
+      
+      // 兼容简单格式 { role, content, timestamp }
+      if (m.role && m.content) {
+        return `
+          <div class="message message-${m.role}">
+            <div>${escapeHtml(m.content)}</div>
+            <div class="message-time">${m.timestamp ? new Date(m.timestamp).toLocaleTimeString('zh-CN') : ''}</div>
+          </div>
+        `;
+      }
+      
+      // 未知格式，跳过
+      return '';
     }
 
     function escapeHtml(text) {
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    function toggleToolCollapse(headerEl) {
+      const inputEl = headerEl.nextElementSibling;
+      if (!inputEl) return;
+      
+      if (headerEl.classList.contains('collapsed')) {
+        headerEl.classList.remove('collapsed');
+        inputEl.classList.remove('collapsed');
+        inputEl.classList.add('expanded');
+      } else {
+        headerEl.classList.add('collapsed');
+        inputEl.classList.add('collapsed');
+        inputEl.classList.remove('expanded');
+      }
     }
 
     function updateChatUI() {
