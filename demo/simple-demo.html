@@ -871,9 +871,37 @@
       document.getElementById('sendBtn').disabled = true;
       document.getElementById('messageInput').disabled = true;
 
-      // 添加占位符用于流式输出
-      const assistantMsg = { role: 'assistant', content: '', timestamp: new Date().toISOString() };
+      // 构建助手消息结构（用于流式更新）
+      const assistantMsg = {
+        type: 'assistant',
+        message: {
+          content: []  // 内容数组，包含 text, thinking, tool_use
+        },
+        timestamp: new Date().toISOString()
+      };
       messageHistory.push(assistantMsg);
+
+      // 当前正在构建的内容块
+      let currentTextBlock = null;
+      let currentThinkingBlock = null;
+      let currentToolUse = null;
+
+      // 辅助函数：确保文本块存在
+      function ensureTextBlock() {
+        if (!currentTextBlock) {
+          currentTextBlock = { type: 'text', text: '' };
+          assistantMsg.message.content.push(currentTextBlock);
+        }
+        return currentTextBlock;
+      }
+
+      // 辅助函数：完成当前工具调用
+      function finishCurrentTool() {
+        if (currentToolUse) {
+          assistantMsg.message.content.push(currentToolUse);
+          currentToolUse = null;
+        }
+      }
 
       try {
         const encodedMsg = encodeURIComponent(message);
@@ -881,7 +909,6 @@
 
         log('开始流式响应...', 'info');
         const eventSource = new EventSource(url);
-        let fullText = '';
 
         eventSource.onmessage = (event) => {
           if (event.data === '[DONE]') {
@@ -896,18 +923,56 @@
 
           try {
             const chunk = JSON.parse(event.data);
+
+            // 处理不同类型的 chunk
             if (chunk.type === 'text' && chunk.content) {
-              fullText += chunk.content;
-              assistantMsg.content = fullText;
+              // 文本内容
+              finishCurrentTool();
+              ensureTextBlock().text += chunk.content;
+              renderMessages();
+            }
+            else if (chunk.type === 'thinking' && chunk.content) {
+              // 思考过程
+              finishCurrentTool();
+              if (!currentThinkingBlock) {
+                currentThinkingBlock = { type: 'thinking', thinking: '' };
+                assistantMsg.message.content.push(currentThinkingBlock);
+              }
+              currentThinkingBlock.thinking += chunk.content;
               renderMessages();
             } else if (chunk.type === 'tool_start') {
-              log(`工具调用: ${chunk.toolName}`, 'warn');
+              // 工具调用开始
+              finishCurrentTool();
+              currentTextBlock = null;
+              currentThinkingBlock = null;
+              // 创建并立即添加到内容中
+              currentToolUse = {
+                type: 'tool_use',
+                id: chunk.toolUseId || `tool_${Date.now()}`,
+                name: chunk.toolName,
+                input: chunk.toolInput || {}
+              };
+              assistantMsg.message.content.push(currentToolUse);
+              log(`🔧 工具调用: ${chunk.toolName}`, 'warn');
+              renderMessages();
+            }
+            else if (chunk.type === 'tool_end') {
+              // 工具调用结束
+              currentToolUse = null;
+            }
+            else if (chunk.type === 'tool_output') {
+              // 工具输出 - 作为独立的 tool_result 消息
+              finishCurrentTool();
+              messageHistory.push({
+                type: 'tool_result',
+                tool_output: chunk.toolOutput,
+                timestamp: new Date().toISOString()
+              });
+              log(`✅ 工具结果: ${chunk.toolName || 'tool'}`, 'success');
+              renderMessages();
             }
           } catch (e) {
-            // 非 JSON 数据
-            fullText += event.data;
-            assistantMsg.content = fullText;
-            renderMessages();
+            log('解析 chunk 失败: ' + e.message, 'error');
           }
         };
 
