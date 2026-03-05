@@ -84,7 +84,6 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
 
     const userContext = requireUserContext(request);
     const sessions = await manager.listSessions(userContext.userId);
-    const used = await manager.getUserSessionCount(userContext.userId);
 
     return {
       sessions: sessions.map((s) => ({
@@ -94,7 +93,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
       })),
       quota: {
         max: userContext.maxSessions,
-        used,
+        used: sessions.length,
       },
     };
   });

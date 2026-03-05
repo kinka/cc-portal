@@ -329,6 +329,7 @@ export class ClaudeSessionManager {
 
     this.sessions.delete(sessionId);
     this.storage.unregisterSession(sessionId);
+    await this.storage.deleteSessionFile(sessionId);
 
     log.info({ sessionId, userId }, 'Session deleted');
     return true;

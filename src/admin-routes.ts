@@ -24,18 +24,14 @@ export function registerAdminRoutes(fastify: FastifyInstance, storage: CLISessio
   // GET /admin/users - List all users
   fastify.get('/admin/users', async () => {
     const users = await storage.listUsers();
-    const result = [];
-
-    for (const user of users) {
-      const sessionCount = await storage.getUserSessionCount(user.id);
-      result.push({
+    const usersWithUsed = await Promise.all(
+      users.map(async (user) => ({
         userId: user.id,
         maxSessions: user.maxSessions,
-        activeSessions: sessionCount,
-      });
-    }
-
-    return { users: result };
+        used: await storage.getUserSessionCount(user.id),
+      }))
+    );
+    return { users: usersWithUsed };
   });
 
   // GET /admin/sessions - List all sessions from CLI storage

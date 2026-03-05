@@ -1,5 +1,6 @@
-import { readdir, readFile, stat, writeFile, mkdir, access } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readdir, readFile, stat, writeFile, mkdir, access, unlink } from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { createLogger } from './logger';
 
@@ -38,6 +39,9 @@ export class CLISessionStorage {
   private initialized = false;
   /** In-memory cache for newly created sessions (sync access) */
   private newSessionsCache = new Map<string, { ownerId: string; path: string }>();
+  /** Short-lived cache for discoverSessions to avoid repeated disk scans within a burst */
+  private discoverCache: { sessions: CLISessionInfo[]; expiresAt: number } | null = null;
+  private static readonly DISCOVER_CACHE_TTL_MS = 2000;
   constructor(
     private usersDir: string,
     private claudeDir: string = join(homedir(), '.claude')
@@ -89,50 +93,99 @@ export class CLISessionStorage {
     return `-${normalized}`;
   }
 
+  /** Absolute working directory for a user (where their Claude sessions live) */
+  private userWorkDir(userId: string): string {
+    return resolve(this.usersDir, userId);
+  }
+
+  /** ~/.claude/projects/{hash} directory for a given user */
+  private userProjectDir(userId: string): string {
+    const hash = CLISessionStorage.calculateProjectHash(this.userWorkDir(userId));
+    return join(this.claudeProjectsDir, hash);
+  }
+
+  /** List session files in a single project directory */
+  private async listSessionsInDir(
+    projectDir: string,
+    projectPath: string,
+  ): Promise<CLISessionInfo[]> {
+    try {
+      const files = await readdir(projectDir, { withFileTypes: true });
+      const results: CLISessionInfo[] = [];
+      for (const f of files) {
+        if (!f.isFile() || !f.name.endsWith('.jsonl')) continue;
+        const fileStat = await stat(join(projectDir, f.name));
+        results.push({
+          id: f.name.replace('.jsonl', ''),
+          projectPath,
+          projectHash: '',
+          lastModified: fileStat.mtime,
+          createdAt: fileStat.birthtime,
+          messageCount: 0,
+        });
+      }
+      return results;
+    } catch {
+      return [];
+    }
+  }
+
   /**
-   * Discover all sessions from CLI's storage
+   * Discover all sessions from CLI's storage.
+   * Results are cached for DISCOVER_CACHE_TTL_MS to avoid repeated disk scans within a burst.
    */
   async discoverSessions(): Promise<CLISessionInfo[]> {
     await this.initialize();
+
+    const now = Date.now();
+    if (this.discoverCache && now < this.discoverCache.expiresAt) {
+      return this.discoverCache.sessions;
+    }
+
     const sessions: CLISessionInfo[] = [];
 
     try {
-      const projectDirs = await readdir(this.claudeProjectsDir);
+      const projectDirs = await readdir(this.claudeProjectsDir, { withFileTypes: true });
 
-      for (const projectHash of projectDirs) {
-        const projectDir = join(this.claudeProjectsDir, projectHash);
-        const projectStat = await stat(projectDir);
-        
-        if (!projectStat.isDirectory()) continue;
-
-        const files = await readdir(projectDir);
-        
-        for (const file of files) {
-          if (!file.endsWith('.jsonl')) continue;
-
-          const sessionId = file.replace('.jsonl', '');
-          const filePath = join(projectDir, file);
-          const fileStat = await stat(filePath);
-
-          const content = await readFile(filePath, 'utf-8');
-          const messageCount = content.split('\n').filter(line => line.trim()).length;
-
-          sessions.push({
-            id: sessionId,
-            projectPath: this.getProjectPathFromHash(projectHash),
-            projectHash,
-            lastModified: fileStat.mtime,
-            createdAt: fileStat.birthtime,
-            messageCount,
-          });
-        }
-      }
+      await Promise.all(
+        projectDirs
+          .filter((d: Dirent) => d.isDirectory())
+          .map(async (d: Dirent) => {
+            const projectHash = d.name;
+            const projectDir = join(this.claudeProjectsDir, projectHash);
+            try {
+              const files = await readdir(projectDir, { withFileTypes: true });
+              for (const file of files) {
+                if (!file.isFile() || !file.name.endsWith('.jsonl')) continue;
+                const sessionId = file.name.replace('.jsonl', '');
+                const filePath = join(projectDir, file.name);
+                const fileStat = await stat(filePath);
+                sessions.push({
+                  id: sessionId,
+                  projectPath: this.getProjectPathFromHash(projectHash),
+                  projectHash,
+                  lastModified: fileStat.mtime,
+                  createdAt: fileStat.birthtime,
+                  messageCount: 0,
+                });
+              }
+            } catch {
+              // skip unreadable project dirs
+            }
+          })
+      );
     } catch (err) {
       log.warn({ err }, 'Failed to discover sessions from CLI storage');
     }
 
     log.info({ count: sessions.length }, 'Discovered sessions from CLI');
+    this.discoverCache = { sessions, expiresAt: now + CLISessionStorage.DISCOVER_CACHE_TTL_MS };
     return sessions;
+  }
+
+  /** Invalidate the discoverSessions cache (call after creating/deleting a session) */
+  invalidateDiscoverCache(): void {
+    this.discoverCache = null;
   }
 
   private getProjectPathFromHash(projectHash: string): string {
@@ -142,53 +195,37 @@ export class CLISessionStorage {
     return projectHash;
   }
 
-  /**
-   * Extract owner userId from project path
-   */
-  private extractOwnerFromProjectPath(projectPath: string): string | undefined {
-    const usersIndex = projectPath.indexOf('/users/');
-    if (usersIndex === -1) return undefined;
-    const afterUsers = projectPath.slice(usersIndex + '/users/'.length);
-    return afterUsers.split('/')[0] || undefined;
-  }
-
   // ============ Session Methods ============
 
   /**
-   * Check if a session exists in CLI storage
+   * Check if a session exists in CLI storage.
+   * Scans per-user project directories instead of all project directories.
    */
   async sessionExists(sessionId: string): Promise<boolean> {
     await this.initialize();
-    
-    // Check memory cache first (newly created sessions)
+
     if (this.newSessionsCache.has(sessionId)) return true;
-    
-    try {
-      const projectDirs = await readdir(this.claudeProjectsDir);
-      
-      for (const projectHash of projectDirs) {
-        const sessionFile = join(this.claudeProjectsDir, projectHash, `${sessionId}.jsonl`);
-        try {
-          await access(sessionFile);
-          return true;
-        } catch {
-          // Not in this project, continue
-        }
+
+    const users = await this.listUsers();
+    for (const user of users) {
+      const sessionFile = join(this.userProjectDir(user.id), `${sessionId}.jsonl`);
+      try {
+        await access(sessionFile);
+        return true;
+      } catch {
+        // not this user's session
       }
-    } catch {
-      // Projects dir doesn't exist
     }
-    
     return false;
   }
 
   /**
-   * Get session info from CLI storage or cache
+   * Get session info from CLI storage or cache.
+   * Scans per-user project directories instead of all project directories.
    */
   async getSessionInfo(sessionId: string): Promise<CLISessionInfo | undefined> {
     await this.initialize();
-    
-    // Check memory cache first (newly created sessions)
+
     const cached = this.newSessionsCache.get(sessionId);
     if (cached) {
       return {
@@ -200,48 +237,47 @@ export class CLISessionStorage {
         messageCount: 0,
       };
     }
-    
-    try {
-      const projectDirs = await readdir(this.claudeProjectsDir);
-      
-      for (const projectHash of projectDirs) {
-        const sessionFile = join(this.claudeProjectsDir, projectHash, `${sessionId}.jsonl`);
-        try {
-          await access(sessionFile);
-          const fileStat = await stat(sessionFile);
-          const content = await readFile(sessionFile, 'utf-8');
-          const messageCount = content.split('\n').filter(line => line.trim()).length;
 
-          return {
-            id: sessionId,
-            projectPath: this.getProjectPathFromHash(projectHash),
-            projectHash,
-            lastModified: fileStat.mtime,
-            createdAt: fileStat.birthtime,
-            messageCount,
-          };
-        } catch {
-          // Not in this project, continue
-        }
+    const users = await this.listUsers();
+    for (const user of users) {
+      const projectDir = this.userProjectDir(user.id);
+      const sessionFile = join(projectDir, `${sessionId}.jsonl`);
+      try {
+        const fileStat = await stat(sessionFile);
+        return {
+          id: sessionId,
+          projectPath: this.userWorkDir(user.id),
+          projectHash: '',
+          lastModified: fileStat.mtime,
+          createdAt: fileStat.birthtime,
+          messageCount: 0,
+        };
+      } catch {
+        // not this user's session
       }
-    } catch {
-      // Projects dir doesn't exist
     }
-    
     return undefined;
   }
 
   /**
-   * Get the owner of a session (from cache or extracted from project path)
+   * Get the owner of a session.
+   * Checks the in-memory cache first, then scans per-user project directories.
    */
   async getSessionOwner(sessionId: string): Promise<string | undefined> {
-    // Check memory cache first
     const cached = this.newSessionsCache.get(sessionId);
     if (cached) return cached.ownerId;
-    
-    const info = await this.getSessionInfo(sessionId);
-    if (!info) return undefined;
-    return this.extractOwnerFromProjectPath(info.projectPath);
+
+    const users = await this.listUsers();
+    for (const user of users) {
+      const sessionFile = join(this.userProjectDir(user.id), `${sessionId}.jsonl`);
+      try {
+        await access(sessionFile);
+        return user.id;
+      } catch {
+        // not this user's session
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -256,6 +292,30 @@ export class CLISessionStorage {
    */
   unregisterSession(sessionId: string): void {
     this.newSessionsCache.delete(sessionId);
+  }
+
+  /**
+   * Delete a session's .jsonl file from disk (~/.claude/projects/)
+   */
+  async deleteSessionFile(sessionId: string): Promise<boolean> {
+    try {
+      const projectDirs = await readdir(this.claudeProjectsDir);
+      for (const projectHash of projectDirs) {
+        const sessionFile = join(this.claudeProjectsDir, projectHash, `${sessionId}.jsonl`);
+        try {
+          await access(sessionFile);
+          await unlink(sessionFile);
+          this.invalidateDiscoverCache();
+          log.info({ sessionId, projectHash }, 'Deleted session file from disk');
+          return true;
+        } catch {
+          // Not in this project, continue
+        }
+      }
+    } catch (err) {
+      log.warn({ err, sessionId }, 'Failed to delete session file');
+    }
+    return false;
   }
   // ============ User Methods (no storage needed) ============
 
@@ -326,32 +386,25 @@ export class CLISessionStorage {
   }
 
   /**
-   * Get session count for a user (from CLI storage + cache)
+   * Get session count for a user.
+   * Directly reads the user's project directory — no full scan needed.
    */
   async getUserSessionCount(userId: string): Promise<number> {
-    const sessions = await this.discoverSessions();
-    let count = sessions.filter(s => {
-      const owner = this.extractOwnerFromProjectPath(s.projectPath);
-      return owner === userId;
-    }).length;
-    
-    // Add sessions from memory cache
-    for (const [id, data] of this.newSessionsCache) {
-      if (data.ownerId === userId) count++;
-    }
-    
-    return count;
+    const sessions = await this.listUserSessions(userId);
+    return sessions.length;
   }
 
   /**
-   * List sessions for a user (from CLI storage + cache)
+   * List sessions for a user.
+   * Reads the user's own project directory directly; no full scan of all projects.
    */
   async listUserSessions(userId: string): Promise<Array<{ id: string; ownerId: string; path?: string }>> {
-    const sessions = await this.discoverSessions();
+    await this.initialize();
+
     const result: Array<{ id: string; ownerId: string; path?: string }> = [];
     const addedIds = new Set<string>();
 
-    // From memory cache (newly created sessions)
+    // Sessions tracked in memory cache (e.g. custom-path sessions)
     for (const [id, data] of this.newSessionsCache) {
       if (data.ownerId === userId) {
         result.push({ id, ownerId: userId, path: data.path });
@@ -359,27 +412,26 @@ export class CLISessionStorage {
       }
     }
 
-    // Owned sessions from CLI
-    for (const s of sessions) {
-      if (addedIds.has(s.id)) continue;
-      const owner = this.extractOwnerFromProjectPath(s.projectPath);
-      if (owner === userId) {
-        result.push({ id: s.id, ownerId: userId, path: s.projectPath });
+    // Sessions in the user's default project directory
+    const userDir = this.userWorkDir(userId);
+    const projectDir = this.userProjectDir(userId);
+    const ownedSessions = await this.listSessionsInDir(projectDir, userDir);
+    for (const s of ownedSessions) {
+      if (!addedIds.has(s.id)) {
+        result.push({ id: s.id, ownerId: userId, path: userDir });
         addedIds.add(s.id);
       }
     }
 
-    // Participated sessions
+    // Sessions the user joined as a participant
     for (const [sessionId, data] of Object.entries(this.config.participants)) {
       if (addedIds.has(sessionId)) continue;
       const joined = data.participants.find(p => p.userId === userId && p.status === 'joined');
       if (joined) {
-        const info = await this.getSessionInfo(sessionId);
-        if (info) {
-          const owner = this.extractOwnerFromProjectPath(info.projectPath);
-          if (owner && owner !== userId) {
-            result.push({ id: sessionId, ownerId: owner, path: info.projectPath });
-          }
+        const owner = await this.getSessionOwner(sessionId);
+        if (owner && owner !== userId) {
+          result.push({ id: sessionId, ownerId: owner });
+          addedIds.add(sessionId);
         }
       }
     }

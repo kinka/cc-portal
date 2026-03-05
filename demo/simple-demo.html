@@ -507,7 +507,7 @@
             <span class="user-name">👤 ${u.userId}</span>
             <button class="btn-delete" onclick="event.stopPropagation(); deleteUser('${u.userId}')" title="删除用户">✕</button>
           </div>
-          <div class="user-info">配额: ${u.activeSessions || 0}/${u.maxSessions}</div>
+          <div class="user-info">配额: ${u.used ?? 0}/${u.maxSessions}</div>
         </div>
       `).join('');
     }
