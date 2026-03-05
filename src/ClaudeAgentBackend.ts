@@ -239,7 +239,7 @@ export class ClaudeAgentBackend extends EventEmitter {
     'mcp__*__*search*',
     'mcp__*__*fetch*',
     'mcp__*__*read*',
-    // 'mcp__*__*find*',
+    'mcp__*__*find*',
   ];
 
   private static matchToolPattern(toolName: string, pattern: string): boolean {
