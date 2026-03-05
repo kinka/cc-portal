@@ -462,7 +462,7 @@ export class ClaudeAgentBackend extends EventEmitter {
       this.readLoopStarted = false;
     }
 
-    const useSrt = true;
+    const useSrt = false; // 暂不启用
     const cmd = useSrt ? 'srt' : 'claude';
     const args = [
       '--output-format',
