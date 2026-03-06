@@ -30,13 +30,13 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
       level: process.env.LOG_LEVEL || (isDev ? 'debug' : 'info'),
       transport: isDev
         ? {
-            target: 'pino-pretty',
-            options: {
-              colorize: true,
-              translateTime: 'SYS:standard',
-              ignore: 'pid,hostname',
-            },
-          }
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            translateTime: 'SYS:standard',
+            ignore: 'pid,hostname',
+          },
+        }
         : undefined,
     },
     requestIdLogLabel: 'reqId',
@@ -66,6 +66,34 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
   }
 
   registerCrossUserRoutes(fastify, userDirectory);
+
+  // MCP User Config Routes
+  if (storage) {
+    fastify.get('/mcp', async (request: FastifyRequest, reply: FastifyReply) => {
+      const userContext = requireUserContext(request);
+      const config = await storage.getUserMcpConfig(userContext.userId);
+      if (!config) {
+        return { mcpServers: {} }; // Return empty structure rather than 404 for ease of use
+      }
+      return config;
+    });
+
+    fastify.put('/mcp', async (request: FastifyRequest, reply: FastifyReply) => {
+      const userContext = requireUserContext(request);
+      const config = request.body as Record<string, unknown>;
+      if (!config || typeof config !== 'object') {
+        reply.status(400);
+        return { error: 'Invalid MCP config body' };
+      }
+      logger.info({ userId: userContext.userId }, 'Updating user MCP configuration');
+      await storage.saveUserMcpConfig(userContext.userId, config);
+      if (manager) {
+        logger.info({ userId: userContext.userId }, 'Triggering session cleanup due to MCP update');
+        manager.destroyUserSessions(userContext.userId);
+      }
+      return { success: true };
+    });
+  }
 
   // Register participant routes
   if (storage && manager) {

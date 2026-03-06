@@ -190,6 +190,11 @@ export class ClaudeSessionManager {
     const sessionId = randomUUID();
     const resolvedPath = await this.resolveUserPath(ownerId, options.path);
 
+    // Read user's MCP config and merge with session options (pass inline to skip trust prompt)
+    const userMcpConfig = await this.storage.getUserMcpConfig(ownerId);
+    const userMcpServers = (userMcpConfig?.mcpServers ?? {}) as Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
+    const mergedMcpServers = { ...userMcpServers, ...(options.mcpServers || {}) };
+
     // Register session in cache for immediate access
     this.storage.registerSession(sessionId, ownerId, resolvedPath);
 
@@ -202,7 +207,7 @@ export class ClaudeSessionManager {
         disallowedTools: options.disallowedTools,
         permissionMode: options.permissionMode,
         permissionTimeoutMs: options.permissionTimeoutMs,
-        mcpServers: options.mcpServers,
+        mcpServers: Object.keys(mergedMcpServers).length > 0 ? mergedMcpServers : undefined,
         maxTurns: options.maxTurns,
         envVars: options.envVars,
         initialMessage: options.initialMessage,
@@ -297,10 +302,26 @@ export class ClaudeSessionManager {
     const sessionInfo = await this.storage.getSessionInfo(metadata.id);
     const resolvedPath = sessionInfo?.projectPath || metadata.path || process.cwd();
 
+    // Read user's MCP config inline (avoids trust prompt for file-based discovery)
+    const userMcpConfig = await this.storage.getUserMcpConfig(metadata.ownerId);
+    const userMcpServers = (userMcpConfig?.mcpServers ?? {}) as Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
+
+    // If the .jsonl file doesn't exist on disk (e.g. session was killed before first message),
+    // treat it as new so we don't fail with "No conversation found"
+    const fileExistsOnDisk = await this.storage.sessionFileExistsOnDisk(metadata.id, metadata.ownerId);
+    if (!fileExistsOnDisk) {
+      log.info({ sessionId: metadata.id }, 'Session file not found on disk, treating as new session');
+    }
+
     const session = new ClaudeSession({
       id: metadata.id,
       path: resolvedPath,
-      isNewSession: false,
+      isNewSession: !fileExistsOnDisk,
+      mcpServers: Object.keys(userMcpServers).length > 0 ? userMcpServers : undefined,
+      bypassPermission: true,
+      sessionContext: this.agentApiBaseUrl
+        ? { apiBaseUrl: this.agentApiBaseUrl, userId: metadata.ownerId }
+        : undefined,
     });
 
     // Sync history from Claude CLI
@@ -360,6 +381,29 @@ export class ClaudeSessionManager {
       }
     }
     log.info('All sessions destroyed');
+  }
+
+  /**
+   * Destroy all active sessions for a specific user
+   */
+  destroyUserSessions(userId: string): void {
+    let count = 0;
+    log.info({ userId }, 'Starting cleanup of all active sessions for user');
+    for (const [sessionId, entry] of this.sessions.entries()) {
+      if (entry.ownerId === userId) {
+        log.info({ userId, sessionId }, 'Closing session process');
+        if (entry.session && entry.session instanceof ClaudeSession) {
+          entry.session.destroy();
+        }
+        this.sessions.delete(sessionId);
+        count++;
+      }
+    }
+    if (count > 0) {
+      log.info({ userId, count }, 'Successfully destroyed user sessions');
+    } else {
+      log.debug({ userId }, 'No active sessions found to destroy for user');
+    }
   }
 
   async getUserSessionCount(userId: string): Promise<number> {

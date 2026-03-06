@@ -139,6 +139,7 @@ export interface ClaudeAgentBackendOptions {
   /** @deprecated use permissionMode: 'bypassPermissions' instead */
   bypassPermission?: boolean;
   mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
+  mcpConfigPaths?: string[];
   maxTurns?: number;
   /** If true, use --session-id (new session). If false, use --resume (existing session). */
   isNewSession?: boolean;
@@ -165,6 +166,7 @@ export class ClaudeAgentBackend extends EventEmitter {
   private canCallTool?: CanCallToolCallback;
   private permissionResolver?: (requestId: string, toolName: string, input: unknown) => Promise<PermissionResult>;
   private mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
+  private mcpConfigPaths?: string[];
   private maxTurns?: number;
   private isNewSession = true;
   private autoAllowToolPatterns?: string[];
@@ -217,6 +219,7 @@ export class ClaudeAgentBackend extends EventEmitter {
     this.canCallTool = options.canCallTool;
     this.permissionResolver = options.permissionResolver;
     this.mcpServers = options.mcpServers;
+    this.mcpConfigPaths = options.mcpConfigPaths;
     this.maxTurns = options.maxTurns;
     this.isNewSession = options.isNewSession ?? true;
     this.autoAllowToolPatterns = options.autoAllowToolPatterns;
@@ -512,6 +515,11 @@ export class ClaudeAgentBackend extends EventEmitter {
     if (this.canCallTool || this.permissionResolver) args.push('--permission-prompt-tool', 'stdio');
     if (this.mcpServers && Object.keys(this.mcpServers).length > 0) {
       args.push('--mcp-config', JSON.stringify({ mcpServers: this.mcpServers }));
+    }
+    if (this.mcpConfigPaths) {
+      for (const p of this.mcpConfigPaths) {
+        args.push('--mcp-config', p);
+      }
     }
 
     // --session-id for new sessions, --resume for existing ones

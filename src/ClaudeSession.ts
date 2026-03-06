@@ -26,6 +26,7 @@ export interface ClaudeSessionOptions {
   /** Timeout in ms for HTTP permission approval; used when canCallTool is not set. Default 300000 (5 min). */
   permissionTimeoutMs?: number;
   mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
+  mcpConfigPaths?: string[];
   maxTurns?: number;
   envVars?: Record<string, string>;
   initialMessage?: string;
@@ -125,6 +126,7 @@ export class ClaudeSession extends EventEmitter {
         ? (requestId, toolName, input) => this.waitForPermission(requestId, toolName, input)
         : undefined,
       mcpServers: options.mcpServers,
+      mcpConfigPaths: options.mcpConfigPaths,
       maxTurns: options.maxTurns,
       bypassPermission: options.bypassPermission,
       isNewSession: options.isNewSession,

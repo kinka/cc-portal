@@ -219,6 +219,17 @@ export class CLISessionStorage {
     return false;
   }
 
+  /** Check if the .jsonl file physically exists on disk (i.e., at least one message was exchanged) */
+  async sessionFileExistsOnDisk(sessionId: string, ownerId: string): Promise<boolean> {
+    const sessionFile = join(this.userProjectDir(ownerId), `${sessionId}.jsonl`);
+    try {
+      await access(sessionFile);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Get session info from CLI storage or cache.
    * Scans per-user project directories instead of all project directories.
@@ -426,6 +437,32 @@ export class CLISessionStorage {
     }
 
     return users;
+  }
+
+  // ============ User MCP Methods ============
+
+  /** Get absolute path to user's MCP config (stored as non-.mcp.json to avoid claude auto-discovery) */
+  getUserMcpConfigPath(userId: string): string {
+    return join(this.userWorkDir(userId), 'mcp-config.json');
+  }
+
+  /** Read user's .mcp.json if it exists */
+  async getUserMcpConfig(userId: string): Promise<Record<string, unknown> | undefined> {
+    const configPath = this.getUserMcpConfigPath(userId);
+    try {
+      const content = await readFile(configPath, 'utf-8');
+      return JSON.parse(content);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Write or overwrite user's .mcp.json */
+  async saveUserMcpConfig(userId: string, config: Record<string, unknown>): Promise<void> {
+    await this.getOrCreateUser(userId); // ensure dir exists
+    const configPath = this.getUserMcpConfigPath(userId);
+    await writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
+    log.info({ userId, configPath }, 'Saved user MCP config');
   }
 
   /**
