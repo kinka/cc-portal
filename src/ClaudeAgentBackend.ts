@@ -151,6 +151,8 @@ export interface ClaudeAgentBackendOptions {
    * Custom predicate: (toolName, input) => true to auto-allow without approval. Runs after autoAllowToolPatterns.
    */
   isAutoAllowTool?: (toolName: string, input: unknown) => boolean;
+  /** Idle timeout duration in milliseconds. Process is destroyed after this much inactivity. Defaults to 10 minutes. */
+  idleTimeoutMs?: number;
 }
 
 export class ClaudeAgentBackend extends EventEmitter {
@@ -183,6 +185,26 @@ export class ClaudeAgentBackend extends EventEmitter {
   private permissionRequestQueue: Array<{ requestId: string; toolName: string; input: unknown }> = [];
   private permissionRequestWaiter?: (value: { requestId: string; toolName: string; input: unknown }) => void;
 
+  private idleTimeoutMs: number;
+  private idleTimer?: ReturnType<typeof setTimeout>;
+
+  private resetIdleTimer(): void {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = setTimeout(() => {
+      if (this.isInitialized) {
+        log.info({ sessionId: this.claudeSessionId }, 'Claude process idle timeout (10m) reached, destroying process');
+        this.destroy();
+      }
+    }, this.idleTimeoutMs);
+  }
+
+  private clearIdleTimer(): void {
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = undefined;
+    }
+  }
+
   constructor(options: ClaudeAgentBackendOptions) {
     super();
     // Increase max listeners to avoid warning with multiple SSE streams
@@ -205,6 +227,7 @@ export class ClaudeAgentBackend extends EventEmitter {
     } else {
       this.permissionMode = options.permissionMode ?? 'bypassPermissions';
     }
+    this.idleTimeoutMs = options.idleTimeoutMs ?? 10 * 60 * 1000;
   }
 
   private acquireLock(): Promise<void> {
@@ -280,6 +303,7 @@ export class ClaudeAgentBackend extends EventEmitter {
 
   /** Write to child stdin and wait until the chunk is flushed (so CLI can read control_response). */
   private writeAndFlushStdin(payload: string): Promise<void> {
+    this.resetIdleTimer();
     if (!this.child?.stdin) return Promise.resolve();
     return new Promise((resolve, reject) => {
       this.child!.stdin!.write(payload, (err) => {
@@ -396,6 +420,7 @@ export class ClaudeAgentBackend extends EventEmitter {
     this.readLoopStarted = true;
 
     const processLine = (line: string) => {
+      this.resetIdleTimer();
       if (!line.trim()) return;
       try {
         const msg = JSON.parse(line) as SDKMessage & { type: string; request_id?: string; request?: { subtype: string } };
@@ -493,26 +518,28 @@ export class ClaudeAgentBackend extends EventEmitter {
     const sessionFlag = this.isNewSession ? '--session-id' : '--resume';
     args.push(sessionFlag, this.claudeSessionId);
     this.killExistingProcessForSession();
-      await new Promise(resolve => setTimeout(resolve, 500));
-    log.info({cmd, args: args.slice(0, 8), sessionFlag }, 'Initializing Claude process');
-      this.child = spawn(cmd, args, {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    log.info({ cmd, args: args.slice(0, 8), sessionFlag }, 'Initializing Claude process');
+    this.child = spawn(cmd, args, {
       cwd: this.cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: process.env,
-      }) as ChildProcessWithoutNullStreams;
+    }) as ChildProcessWithoutNullStreams;
     this.rl = createInterface({ input: this.child.stdout! });
-      this.child.on('error', (error) => {
+    this.child.on('error', (error) => {
       log.error({ error: error.message }, 'Process error');
       this.isInitialized = false;
+      this.clearIdleTimer();
     });
-      this.child.on('close', (code) => {
-        log.info({ code }, 'Process exited');
-        this.isInitialized = false;
-        this.rl?.close();
-        // Notify listeners that process died (for cleaning up pending permissions)
-        this.emit('processDied', { code });
-      });
-      let stderrBuffer = '';
+    this.child.on('close', (code) => {
+      log.info({ code }, 'Process exited');
+      this.isInitialized = false;
+      this.rl?.close();
+      this.clearIdleTimer();
+      // Notify listeners that process died (for cleaning up pending permissions)
+      this.emit('processDied', { code });
+    });
+    let stderrBuffer = '';
     this.child.stderr!.on('data', (data) => {
       const text = data.toString();
       stderrBuffer += text;
@@ -523,6 +550,7 @@ export class ClaudeAgentBackend extends EventEmitter {
     if (!this.child.killed && this.child.exitCode === null) {
       this.isInitialized = true;
       this.startReadLoop();
+      this.resetIdleTimer();
       return;
     }
     const exitCode = this.child?.exitCode;
@@ -553,6 +581,7 @@ export class ClaudeAgentBackend extends EventEmitter {
         message: { role: 'user', content: message },
       };
       this.child.stdin.write(JSON.stringify(userMessage) + '\n');
+      this.resetIdleTimer();
 
       let fullText = '';
       const timeoutMs = 300_000;
@@ -602,6 +631,7 @@ export class ClaudeAgentBackend extends EventEmitter {
           message: { role: 'user', content: message },
         };
         this.child.stdin.write(JSON.stringify(userMessage) + '\n');
+        this.resetIdleTimer();
       }
 
       const timeoutMs = 300_000;
@@ -684,7 +714,7 @@ export class ClaudeAgentBackend extends EventEmitter {
           const items = Array.isArray(content) ? content : [];
           for (const block of items) {
             if (block && typeof block === 'object' && (block as { type?: string }).type === 'tool_result') {
-              const toolResultBlock = block as { tool_use_id?: string; [key: string]: unknown };
+              const toolResultBlock = block as { tool_use_id?: string;[key: string]: unknown };
               yield { type: 'tool_output', toolOutput: block, toolUseId: toolResultBlock.tool_use_id };
             }
           }
@@ -857,6 +887,7 @@ export class ClaudeAgentBackend extends EventEmitter {
   }
 
   destroy(): void {
+    this.clearIdleTimer();
     for (const ctrl of this.cancelControllers.values()) ctrl.abort();
     this.cancelControllers.clear();
     if (this.child && !this.child.killed) {
