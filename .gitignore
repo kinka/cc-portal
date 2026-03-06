@@ -13,3 +13,7 @@ memory/
 # Development files
 todo.md
 srt-settings.json
+
+# Portal Claude - only track settings.json
+portal-claude/*
+#!portal-claude/settings.json
