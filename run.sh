@@ -15,6 +15,12 @@ VOLUMES=(
   -v "$(pwd)/portal-claude:/home/ccas/.claude"
 )
 
+DOCKER_FLAGS="-it --rm"
+if [ "$1" = "-d" ] || [ "$1" = "--detach" ]; then
+  shift
+  DOCKER_FLAGS="-d --rm"
+fi
+
 if [ "$1" = "--root" ]; then
   shift
   DOCKER_USER="-u root"
@@ -42,7 +48,7 @@ CMD="
   $USER_CMD
 "
 
-docker run -it --rm --name "$CONTAINER_NAME" $DOCKER_USER \
+docker run $DOCKER_FLAGS --name "$CONTAINER_NAME" $DOCKER_USER \
   "${VOLUMES[@]}" \
   -e PORT="$PORT" \
   -e NODE_TLS_REJECT_UNAUTHORIZED=0 \
