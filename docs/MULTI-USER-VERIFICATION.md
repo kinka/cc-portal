@@ -20,10 +20,10 @@
 ## 步骤一：启动服务
 
 ```bash
-# 使用默认端口 3333
+# 使用默认端口 9033
 bun run dev
 
-# 如果 3333 端口已占用，指定其他端口
+# 如果 9033 端口已占用，指定其他端口
 PORT=3334 CC_AGENTS_URL=http://localhost:3334 bun run dev
 ```
 

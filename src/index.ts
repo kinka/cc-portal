@@ -4,7 +4,7 @@ import { CLISessionStorage } from './CLISessionStorage';
 import { logger } from './logger';
 
 const start = async () => {
-  const port = parseInt(process.env.PORT || '3333', 10);
+  const port = parseInt(process.env.PORT || '9033', 10);
   const agentApiBaseUrl = process.env.CC_AGENTS_URL || `http://localhost:${port}`;
   const usersDir = process.env.USERS_DIR || './users';
 

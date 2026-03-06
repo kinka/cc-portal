@@ -386,10 +386,10 @@ bun install
 bun run dev
 
 # 3. 打开 Demo
-open http://localhost:3333/Demo/chat-demo.html
+open http://localhost:9033/Demo/chat-demo.html
 
 # 或使用 simple-demo 并指定用户
-open http://localhost:3333/Demo/simple-demo.html?user=alice
+open http://localhost:9033/Demo/simple-demo.html?user=alice
 ```
 
 ---

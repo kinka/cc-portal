@@ -8,7 +8,7 @@ echo "🎭 cc-portal 进程复用演示"
 echo "=========================================="
 echo ""
 
-API="http://localhost:3333"
+API="http://localhost:9033"
 
 # 1. 清理现有 sessions
 echo "🧹 步骤 1: 清理现有 sessions..."

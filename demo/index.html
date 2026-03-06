@@ -1,24 +1,37 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Multi-Agent 迭代开发演示</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: #0f172a;
       color: #e2e8f0;
       min-height: 100vh;
     }
-    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
     header {
       text-align: center;
       padding: 30px 0;
       border-bottom: 1px solid #334155;
       margin-bottom: 20px;
     }
+
     h1 {
       font-size: 2rem;
       background: linear-gradient(135deg, #60a5fa, #a78bfa);
@@ -26,7 +39,12 @@
       -webkit-text-fill-color: transparent;
       margin-bottom: 8px;
     }
-    .subtitle { color: #94a3b8; font-size: 0.95rem; }
+
+    .subtitle {
+      color: #94a3b8;
+      font-size: 0.95rem;
+    }
+
     .config-bar {
       background: #1e293b;
       border-radius: 12px;
@@ -37,15 +55,18 @@
       align-items: center;
       flex-wrap: wrap;
     }
+
     .config-item {
       display: flex;
       align-items: center;
       gap: 8px;
     }
+
     .config-item label {
       font-size: 0.875rem;
       color: #94a3b8;
     }
+
     .config-item input {
       background: #0f172a;
       border: 1px solid #334155;
@@ -55,16 +76,19 @@
       font-size: 0.875rem;
       width: 180px;
     }
+
     .config-item input:focus {
       outline: none;
       border-color: #60a5fa;
     }
+
     .dashboard {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 16px;
       margin-bottom: 20px;
     }
+
     .agent-card {
       background: #1e293b;
       border-radius: 12px;
@@ -72,16 +96,32 @@
       border: 1px solid #334155;
       transition: all 0.3s ease;
     }
-    .agent-card:hover { border-color: #60a5fa; }
-    .agent-card.running { border-color: #22c55e; box-shadow: 0 0 15px rgba(34, 197, 94, 0.15); }
-    .agent-card.error { border-color: #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.15); }
-    .agent-card.completed { border-color: #3b82f6; }
+
+    .agent-card:hover {
+      border-color: #60a5fa;
+    }
+
+    .agent-card.running {
+      border-color: #22c55e;
+      box-shadow: 0 0 15px rgba(34, 197, 94, 0.15);
+    }
+
+    .agent-card.error {
+      border-color: #ef4444;
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.15);
+    }
+
+    .agent-card.completed {
+      border-color: #3b82f6;
+    }
+
     .agent-header {
       display: flex;
       align-items: center;
       gap: 12px;
       margin-bottom: 12px;
     }
+
     .agent-avatar {
       width: 40px;
       height: 40px;
@@ -91,11 +131,29 @@
       justify-content: center;
       font-size: 20px;
     }
-    .agent-1 { background: linear-gradient(135deg, #f472b6, #db2777); }
-    .agent-2 { background: linear-gradient(135deg, #60a5fa, #2563eb); }
-    .agent-3 { background: linear-gradient(135deg, #a78bfa, #7c3aed); }
-    .agent-info h3 { font-size: 1rem; margin-bottom: 2px; }
-    .agent-role { font-size: 0.8rem; color: #94a3b8; }
+
+    .agent-1 {
+      background: linear-gradient(135deg, #f472b6, #db2777);
+    }
+
+    .agent-2 {
+      background: linear-gradient(135deg, #60a5fa, #2563eb);
+    }
+
+    .agent-3 {
+      background: linear-gradient(135deg, #a78bfa, #7c3aed);
+    }
+
+    .agent-info h3 {
+      font-size: 1rem;
+      margin-bottom: 2px;
+    }
+
+    .agent-role {
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+
     .status-badge {
       display: inline-flex;
       align-items: center;
@@ -105,12 +163,47 @@
       font-size: 0.8rem;
       margin-bottom: 12px;
     }
-    .status-idle { background: rgba(148, 163, 184, 0.2); color: #94a3b8; }
-    .status-running { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
-    .status-error { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
-    .status-completed { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
-    .pulse { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    .status-idle {
+      background: rgba(148, 163, 184, 0.2);
+      color: #94a3b8;
+    }
+
+    .status-running {
+      background: rgba(34, 197, 94, 0.2);
+      color: #22c55e;
+    }
+
+    .status-error {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+    }
+
+    .status-completed {
+      background: rgba(59, 130, 246, 0.2);
+      color: #3b82f6;
+    }
+
+    .pulse {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.4;
+      }
+    }
+
     .agent-task {
       background: #0f172a;
       border-radius: 8px;
@@ -120,6 +213,7 @@
       color: #cbd5e1;
       min-height: 40px;
     }
+
     .agent-response {
       background: #0f172a;
       border-radius: 8px;
@@ -131,6 +225,7 @@
       overflow-y: auto;
       border-left: 3px solid #60a5fa;
     }
+
     .progress-bar {
       height: 6px;
       background: #334155;
@@ -138,11 +233,13 @@
       overflow: hidden;
       margin-bottom: 10px;
     }
+
     .progress-fill {
       height: 100%;
       border-radius: 3px;
       transition: width 0.5s ease;
     }
+
     .agent-stats {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -150,12 +247,14 @@
       font-size: 0.75rem;
       color: #64748b;
     }
+
     .controls {
       display: flex;
       gap: 12px;
       margin-bottom: 20px;
       flex-wrap: wrap;
     }
+
     .btn {
       padding: 10px 20px;
       border-radius: 8px;
@@ -168,19 +267,47 @@
       align-items: center;
       gap: 6px;
     }
-    .btn-primary { background: linear-gradient(135deg, #60a5fa, #3b82f6); color: white; }
-    .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3); }
-    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-    .btn-secondary { background: #334155; color: #e2e8f0; }
-    .btn-secondary:hover { background: #475569; }
-    .btn-danger { background: #ef4444; color: white; }
-    .btn-danger:hover { background: #dc2626; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #60a5fa, #3b82f6);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: #334155;
+      color: #e2e8f0;
+    }
+
+    .btn-secondary:hover {
+      background: #475569;
+    }
+
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+    }
+
     .log-panel {
       background: #1e293b;
       border-radius: 12px;
       border: 1px solid #334155;
       overflow: hidden;
     }
+
     .log-header {
       padding: 16px 20px;
       border-bottom: 1px solid #334155;
@@ -190,11 +317,13 @@
       flex-wrap: wrap;
       gap: 12px;
     }
+
     .log-tabs {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
     }
+
     .log-tab {
       padding: 6px 14px;
       border-radius: 6px;
@@ -205,18 +334,30 @@
       cursor: pointer;
       transition: all 0.2s;
     }
+
     .log-tab:hover {
       border-color: #60a5fa;
       color: #e2e8f0;
     }
+
     .log-tab.active {
       background: linear-gradient(135deg, #60a5fa, #3b82f6);
       color: white;
       border-color: transparent;
     }
-    .log-tab.agent-1-tab.active { background: linear-gradient(135deg, #f472b6, #db2777); }
-    .log-tab.agent-2-tab.active { background: linear-gradient(135deg, #60a5fa, #2563eb); }
-    .log-tab.agent-3-tab.active { background: linear-gradient(135deg, #a78bfa, #7c3aed); }
+
+    .log-tab.agent-1-tab.active {
+      background: linear-gradient(135deg, #f472b6, #db2777);
+    }
+
+    .log-tab.agent-2-tab.active {
+      background: linear-gradient(135deg, #60a5fa, #2563eb);
+    }
+
+    .log-tab.agent-3-tab.active {
+      background: linear-gradient(135deg, #a78bfa, #7c3aed);
+    }
+
     .log-content {
       display: none;
       max-height: 400px;
@@ -225,9 +366,11 @@
       font-family: 'Monaco', 'Consolas', monospace;
       font-size: 0.8rem;
     }
+
     .log-content.active {
       display: block;
     }
+
     .log-list {
       max-height: 300px;
       overflow-y: auto;
@@ -235,19 +378,48 @@
       font-family: 'Monaco', 'Consolas', monospace;
       font-size: 0.8rem;
     }
+
     .log-entry {
       padding: 6px 0;
       border-bottom: 1px solid #334155;
       color: #94a3b8;
     }
-    .log-entry:last-child { border-bottom: none; }
-    .log-time { color: #64748b; margin-right: 8px; }
-    .log-info { color: #60a5fa; }
-    .log-success { color: #22c55e; }
-    .log-error { color: #ef4444; }
-    .log-warn { color: #f59e0b; }
-    .log-tool { color: #22d3ee; }
-    .log-detail { color: #94a3b8; font-size: 0.75rem; padding-left: 16px; }
+
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+
+    .log-time {
+      color: #64748b;
+      margin-right: 8px;
+    }
+
+    .log-info {
+      color: #60a5fa;
+    }
+
+    .log-success {
+      color: #22c55e;
+    }
+
+    .log-error {
+      color: #ef4444;
+    }
+
+    .log-warn {
+      color: #f59e0b;
+    }
+
+    .log-tool {
+      color: #22d3ee;
+    }
+
+    .log-detail {
+      color: #94a3b8;
+      font-size: 0.75rem;
+      padding-left: 16px;
+    }
+
     .workflow-panel {
       background: #1e293b;
       border-radius: 12px;
@@ -255,22 +427,26 @@
       margin-bottom: 20px;
       border: 1px solid #334155;
     }
+
     .workflow-title {
       font-size: 0.9rem;
       color: #94a3b8;
       margin-bottom: 16px;
     }
+
     .workflow-steps {
       display: flex;
       align-items: center;
       gap: 12px;
     }
+
     .workflow-step {
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 8px;
     }
+
     .step-box {
       width: 80px;
       height: 80px;
@@ -284,28 +460,35 @@
       border: 2px solid #334155;
       transition: all 0.3s ease;
     }
+
     .step-box.active {
       border-color: #22c55e;
       box-shadow: 0 0 15px rgba(34, 197, 94, 0.3);
     }
+
     .step-box.completed {
       border-color: #3b82f6;
       background: rgba(59, 130, 246, 0.1);
     }
+
     .step-avatar {
       font-size: 24px;
     }
+
     .step-name {
       font-size: 0.75rem;
       color: #94a3b8;
     }
+
     .workflow-arrow {
       font-size: 24px;
       color: #475569;
     }
+
     .workflow-arrow.active {
       color: #22c55e;
     }
+
     .step-output {
       font-size: 0.7rem;
       color: #64748b;
@@ -315,13 +498,24 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+
     @media (max-width: 1024px) {
-      .dashboard { grid-template-columns: 1fr; }
-      .config-bar { flex-direction: column; align-items: stretch; }
-      .config-item input { width: 100%; }
+      .dashboard {
+        grid-template-columns: 1fr;
+      }
+
+      .config-bar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .config-item input {
+        width: 100%;
+      }
     }
   </style>
 </head>
+
 <body>
   <div class="container">
     <header>
@@ -361,7 +555,7 @@
     <div class="config-bar">
       <div class="config-item">
         <label>API 地址:</label>
-        <input type="text" id="apiUrl" value="http://localhost:3333" placeholder="http://localhost:3333">
+        <input type="text" id="apiUrl" value="http://localhost:9033" placeholder="http://localhost:9033">
       </div>
       <div class="config-item">
         <label>工作目录:</label>
@@ -403,7 +597,8 @@
         <div class="agent-task" id="task1">点击「创建 3 个 Agents」开始</div>
         <div class="agent-response" id="response1" style="display: none;"></div>
         <div class="progress-bar">
-          <div class="progress-fill agent-1" id="progress1" style="width: 0%; background: linear-gradient(90deg, #f472b6, #db2777);"></div>
+          <div class="progress-fill agent-1" id="progress1"
+            style="width: 0%; background: linear-gradient(90deg, #f472b6, #db2777);"></div>
         </div>
         <div class="agent-stats">
           <div>Session: <span id="session1">-</span></div>
@@ -425,7 +620,8 @@
         <div class="agent-task" id="task2">等待创建...</div>
         <div class="agent-response" id="response2" style="display: none;"></div>
         <div class="progress-bar">
-          <div class="progress-fill agent-2" id="progress2" style="width: 0%; background: linear-gradient(90deg, #60a5fa, #2563eb);"></div>
+          <div class="progress-fill agent-2" id="progress2"
+            style="width: 0%; background: linear-gradient(90deg, #60a5fa, #2563eb);"></div>
         </div>
         <div class="agent-stats">
           <div>Session: <span id="session2">-</span></div>
@@ -447,7 +643,8 @@
         <div class="agent-task" id="task3">等待创建...</div>
         <div class="agent-response" id="response3" style="display: none;"></div>
         <div class="progress-bar">
-          <div class="progress-fill agent-3" id="progress3" style="width: 0%; background: linear-gradient(90deg, #a78bfa, #7c3aed);"></div>
+          <div class="progress-fill agent-3" id="progress3"
+            style="width: 0%; background: linear-gradient(90deg, #a78bfa, #7c3aed);"></div>
         </div>
         <div class="agent-stats">
           <div>Session: <span id="session3">-</span></div>
@@ -464,7 +661,8 @@
           <button class="log-tab agent-2-tab" id="tab-agent2" onclick="switchLogTab('agent2')">💻 开发者</button>
           <button class="log-tab agent-3-tab" id="tab-agent3" onclick="switchLogTab('agent3')">🧪 测试者</button>
         </div>
-        <button class="btn btn-secondary" onclick="clearAllLogs()" style="padding: 6px 12px; font-size: 0.8rem;">清空全部</button>
+        <button class="btn btn-secondary" onclick="clearAllLogs()"
+          style="padding: 6px 12px; font-size: 0.8rem;">清空全部</button>
       </div>
 
       <!-- 系统日志 -->
@@ -574,8 +772,8 @@
       statusEl.innerHTML = status === 'running' ? '<span class="pulse"></span> 运行中' : status === 'error' ? '<span>❌</span> 错误' : status === 'completed' ? '<span>✅</span> 完成' : '<span>●</span> 等待中';
       taskEl.textContent = message;
       progressEl.style.width = progress + '%';
-      if (agents[i-1].sessionId) {
-        sessionEl.textContent = agents[i-1].sessionId.slice(0, 8) + '...';
+      if (agents[i - 1].sessionId) {
+        sessionEl.textContent = agents[i - 1].sessionId.slice(0, 8) + '...';
       }
     }
 
@@ -620,13 +818,13 @@
           const data = await res.json();
           agent.sessionId = data.sessionId;
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-          document.getElementById(`time${i+1}`).textContent = elapsed + 's';
+          document.getElementById(`time${i + 1}`).textContent = elapsed + 's';
 
           updateAgentCard(i + 1, 'completed', `Session 创建成功`, 40);
-          log(`Agent ${i+1} (${agent.name}): Session ${data.sessionId.slice(0, 8)}... 创建成功`, 'success');
+          log(`Agent ${i + 1} (${agent.name}): Session ${data.sessionId.slice(0, 8)}... 创建成功`, 'success');
         } catch (e) {
           updateAgentCard(i + 1, 'error', '创建失败: ' + e.message, 0);
-          log(`Agent ${i+1} 创建失败: ${e.message}`, 'error');
+          log(`Agent ${i + 1} 创建失败: ${e.message}`, 'error');
         }
       }));
 
@@ -684,7 +882,7 @@
         log(`目标: ${iter.desc}`);
 
         // 开发者实现
-        updateWorkflowStep(2, 'active', `迭代${round+1}`);
+        updateWorkflowStep(2, 'active', `迭代${round + 1}`);
         const devPrompt = `作为开发者，请完成"${iter.name}"阶段的代码实现。
 
 背景信息：
@@ -707,10 +905,10 @@ ${accumulatedCode}
           return;
         }
 
-        accumulatedCode += `\n【迭代${round+1}代码】\n${devResult}\n`;
+        accumulatedCode += `\n【迭代${round + 1}代码】\n${devResult}\n`;
 
         // 测试者验证
-        updateWorkflowStep(3, 'active', `测试${round+1}`);
+        updateWorkflowStep(3, 'active', `测试${round + 1}`);
         const testPrompt = `作为测试者，请验证"${iter.name}"阶段的实现。
 
 背景信息：
@@ -733,8 +931,8 @@ ${accumulatedCode.substring(0, 2000)}...
         }
 
         log(`✅ 迭代 ${round + 1} 完成: ${iter.name}`);
-        updateWorkflowStep(2, 'completed', `迭代${round+1}✓`);
-        updateWorkflowStep(3, 'completed', `测试${round+1}✓`);
+        updateWorkflowStep(2, 'completed', `迭代${round + 1}✓`);
+        updateWorkflowStep(3, 'completed', `测试${round + 1}✓`);
       }
 
       updateWorkflowArrow(2, true);
@@ -763,14 +961,14 @@ ${accumulatedCode.substring(0, 2000)}...
     async function runAgentStep(i, prompt, progress) {
       const agent = agents[i];
       if (!agent.sessionId) {
-        log(`Agent ${i+1} 未创建，跳过`, 'warn');
+        log(`Agent ${i + 1} 未创建，跳过`, 'warn');
         return null;
       }
 
       const startTime = Date.now();
       updateAgentCard(i + 1, 'running', '处理中...', progress - 10);
 
-      const responseEl = document.getElementById(`response${i+1}`);
+      const responseEl = document.getElementById(`response${i + 1}`);
       responseEl.style.display = 'block';
       responseEl.textContent = '';
 
@@ -778,14 +976,14 @@ ${accumulatedCode.substring(0, 2000)}...
         const encodedPrompt = encodeURIComponent(prompt);
         const url = `${API_URL()}/sessions/${agent.sessionId}/stream?message=${encodedPrompt}`;
 
-        log(`Agent ${i+1} (${agent.name}): 启动流式连接...`);
+        log(`Agent ${i + 1} (${agent.name}): 启动流式连接...`);
 
         const eventSource = new EventSource(url);
         let fullText = '';
         let isEnded = false;
 
         eventSource.onopen = () => {
-          log(`Agent ${i+1} (${agent.name}): 连接已建立`);
+          log(`Agent ${i + 1} (${agent.name}): 连接已建立`);
         };
 
         eventSource.onmessage = (event) => {
@@ -793,9 +991,9 @@ ${accumulatedCode.substring(0, 2000)}...
             eventSource.close();
             isEnded = true;
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-            document.getElementById(`time${i+1}`).textContent = elapsed + 's';
-            updateAgentCard(i + 1, 'completed', `步骤 ${i+1}/3 完成`, progress);
-            log(`Agent ${i+1} (${agent.name}): 步骤完成，耗时 ${elapsed}s，输出 ${fullText.length} 字符`, 'success');
+            document.getElementById(`time${i + 1}`).textContent = elapsed + 's';
+            updateAgentCard(i + 1, 'completed', `步骤 ${i + 1}/3 完成`, progress);
+            log(`Agent ${i + 1} (${agent.name}): 步骤完成，耗时 ${elapsed}s，输出 ${fullText.length} 字符`, 'success');
             agentLog(i + 1, `✅ 步骤完成，耗时 ${elapsed}s，输出 ${fullText.length} 字符`);
             resolve(fullText);
             return;
@@ -819,7 +1017,7 @@ ${accumulatedCode.substring(0, 2000)}...
               agentLog(i + 1, chunkText, 'info');
             } else if (chunk.type === 'tool_start') {
               const toolMsg = `调用工具: ${chunk.toolName}`;
-              log(`Agent ${i+1} (${agent.name}): 🔧 ${toolMsg}`, 'info');
+              log(`Agent ${i + 1} (${agent.name}): 🔧 ${toolMsg}`, 'info');
               agentLog(i + 1, toolMsg, 'tool');
 
               // 显示输入参数
@@ -864,7 +1062,7 @@ ${accumulatedCode.substring(0, 2000)}...
                 agentLog(i + 1, '结果: (空)', 'tool-output');
               }
             } else if (chunk.type === 'error') {
-              log(`Agent ${i+1} 错误: ${chunk.error}`, 'error');
+              log(`Agent ${i + 1} 错误: ${chunk.error}`, 'error');
               agentLog(i + 1, `❌ 错误: ${chunk.error}`, 'error');
             }
           } catch (e) {
@@ -882,7 +1080,7 @@ ${accumulatedCode.substring(0, 2000)}...
           if (!isEnded) {
             eventSource.close();
             updateAgentCard(i + 1, 'error', '连接错误', progress - 10);
-            log(`Agent ${i+1} 连接错误`, 'error');
+            log(`Agent ${i + 1} 连接错误`, 'error');
             reject(new Error('SSE connection error'));
           }
         };
@@ -927,9 +1125,9 @@ ${accumulatedCode.substring(0, 2000)}...
         agents.forEach((agent, i) => {
           agent.sessionId = null;
           updateAgentCard(i + 1, 'idle', '已清空', 0);
-          document.getElementById(`session${i+1}`).textContent = '-';
-          document.getElementById(`time${i+1}`).textContent = '-';
-          document.getElementById(`response${i+1}`).style.display = 'none';
+          document.getElementById(`session${i + 1}`).textContent = '-';
+          document.getElementById(`time${i + 1}`).textContent = '-';
+          document.getElementById(`response${i + 1}`).style.display = 'none';
         });
 
         document.getElementById('btnCreate').disabled = false;
@@ -944,4 +1142,5 @@ ${accumulatedCode.substring(0, 2000)}...
     window.onload = () => checkConnection();
   </script>
 </body>
+
 </html>

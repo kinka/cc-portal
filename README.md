@@ -82,7 +82,7 @@ bun run dev
 bun run start
 ```
 
-服务默认运行在 `http://0.0.0.0:3333`
+服务默认运行在 `http://0.0.0.0:9033`
 
 ### API 端点
 
@@ -269,7 +269,7 @@ open demo/chat-demo.html
 
 ```bash
 # 1. 创建会话
-SESSION=$(curl -s -X POST http://localhost:3333/sessions \
+SESSION=$(curl -s -X POST http://localhost:9033/sessions \
   -H "Content-Type: application/json" \
   -H "X-User-ID: alice" \
   -d '{"path": "/Users/kinka/project", "initialMessage": "你好"}' | jq -r '.sessionId')
@@ -277,17 +277,17 @@ SESSION=$(curl -s -X POST http://localhost:3333/sessions \
 echo "Session ID: $SESSION"
 
 # 2. 发送消息
-curl -X POST "http://localhost:3333/sessions/$SESSION/messages" \
+curl -X POST "http://localhost:9033/sessions/$SESSION/messages" \
   -H "Content-Type: application/json" \
   -H "X-User-ID: alice" \
   -d '{"message": "帮我查看当前目录的文件"}'
 
 # 3. 流式接收消息
-curl "http://localhost:3333/sessions/$SESSION/stream" \
+curl "http://localhost:9033/sessions/$SESSION/stream" \
   -H "X-User-ID: alice"
 
 # 4. 删除会话
-curl -X DELETE "http://localhost:3333/sessions/$SESSION" \
+curl -X DELETE "http://localhost:9033/sessions/$SESSION" \
   -H "X-User-ID: alice"
 ```
 
@@ -295,25 +295,25 @@ curl -X DELETE "http://localhost:3333/sessions/$SESSION" \
 
 ```bash
 # Alice 创建会话
-SESSION=$(curl -s -X POST http://localhost:3333/sessions \
+SESSION=$(curl -s -X POST http://localhost:9033/sessions \
   -H "Content-Type: application/json" \
   -H "X-User-ID: alice" \
   -d '{"project": "demo"}' | jq -r '.sessionId')
 
 # Alice 添加 Bob 为参与者
-curl -X POST "http://localhost:3333/sessions/$SESSION/participants" \
+curl -X POST "http://localhost:9033/sessions/$SESSION/participants" \
   -H "Content-Type: application/json" \
   -H "X-User-ID: alice" \
   -d '{"userId": "bob"}'
 
 # Alice 发送消息
-curl -X POST "http://localhost:3333/sessions/$SESSION/messages" \
+curl -X POST "http://localhost:9033/sessions/$SESSION/messages" \
   -H "Content-Type: application/json" \
   -H "X-User-ID: alice" \
   -d '{"message": "Hello everyone!"}'
 
 # Bob 也能看到消息（使用同一个 sessionId）
-curl "http://localhost:3333/sessions/$SESSION" \
+curl "http://localhost:9033/sessions/$SESSION" \
   -H "X-User-ID: bob"
 ```
 
@@ -376,7 +376,7 @@ session.destroy();
 
 ```
 [Session Context]
-CC-Portal API: http://localhost:3333
+CC-Portal API: http://localhost:9033
 Auth header: X-User-ID: alice
 Your session ID: xxx-xxx
 
@@ -405,7 +405,7 @@ Current speaker: alice
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `PORT` | `3333` | 服务端口 |
+| `PORT` | `9033` | 服务端口 |
 | `HOST` | `0.0.0.0` | 服务主机 |
 | `DEBUG` | - | 启用调试日志 |
 

@@ -1,11 +1,14 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CC-Portal Chat Demo</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
   <style>
     :root {
       --bg: #0d1117;
@@ -15,20 +18,24 @@
       --text: #c9d1d9;
       --text-muted: #8b949e;
       --accent: #58a6ff;
-      --accent-dim: rgba(88,166,255,0.1);
+      --accent-dim: rgba(88, 166, 255, 0.1);
       --alice: #7ee787;
-      --alice-dim: rgba(126,231,135,0.12);
-      --alice-border: rgba(126,231,135,0.3);
+      --alice-dim: rgba(126, 231, 135, 0.12);
+      --alice-border: rgba(126, 231, 135, 0.3);
       --bob: #f778ba;
-      --bob-dim: rgba(247,120,186,0.12);
-      --bob-border: rgba(247,120,186,0.3);
+      --bob-dim: rgba(247, 120, 186, 0.12);
+      --bob-border: rgba(247, 120, 186, 0.3);
       --claude: #e3b341;
-      --claude-dim: rgba(227,179,65,0.08);
-      --claude-border: rgba(227,179,65,0.25);
+      --claude-dim: rgba(227, 179, 65, 0.08);
+      --claude-border: rgba(227, 179, 65, 0.25);
       --danger: #f85149;
     }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
     body {
       font-family: 'Inter', -apple-system, sans-serif;
@@ -38,7 +45,11 @@
       line-height: 1.6;
     }
 
-    .container { max-width: 1320px; margin: 0 auto; padding: 20px; }
+    .container {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 20px;
+    }
 
     header {
       text-align: center;
@@ -56,7 +67,10 @@
       -webkit-text-fill-color: transparent;
     }
 
-    .subtitle { color: var(--text-muted); font-size: 12px; }
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 12px;
+    }
 
     /* Flow steps */
     .flow-card {
@@ -80,14 +94,17 @@
     }
 
     .num {
-      width: 18px; height: 18px;
+      width: 18px;
+      height: 18px;
       border-radius: 50%;
       background: var(--accent-dim);
       border: 1px solid var(--accent);
       color: var(--accent);
       font-size: 10px;
       font-weight: 700;
-      display: flex; align-items: center; justify-content: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       flex-shrink: 0;
     }
 
@@ -117,17 +134,57 @@
       transition: all 0.15s;
     }
 
-    .btn-primary { background: var(--accent); color: #000; }
-    .btn-primary:hover { opacity: 0.85; }
-    .btn-secondary { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); }
-    .btn-secondary:hover { border-color: var(--accent); }
-    .btn-danger { background: rgba(248,81,73,0.1); color: var(--danger); border: 1px solid rgba(248,81,73,0.25); }
-    .btn-danger:hover { border-color: var(--danger); }
-    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
-    .btn-alice { background: var(--alice); color: #000; }
-    .btn-alice:hover { opacity: 0.85; }
-    .btn-bob   { background: var(--bob);   color: #000; }
-    .btn-bob:hover   { opacity: 0.85; }
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.85;
+    }
+
+    .btn-secondary {
+      background: var(--bg-card);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent);
+    }
+
+    .btn-danger {
+      background: rgba(248, 81, 73, 0.1);
+      color: var(--danger);
+      border: 1px solid rgba(248, 81, 73, 0.25);
+    }
+
+    .btn-danger:hover {
+      border-color: var(--danger);
+    }
+
+    .btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .btn-alice {
+      background: var(--alice);
+      color: #000;
+    }
+
+    .btn-alice:hover {
+      opacity: 0.85;
+    }
+
+    .btn-bob {
+      background: var(--bob);
+      color: #000;
+    }
+
+    .btn-bob:hover {
+      opacity: 0.85;
+    }
 
     /* Panels */
     .main-grid {
@@ -147,9 +204,17 @@
       transition: border-color 0.3s;
     }
 
-    .chat-panel.alice  { border-color: rgba(126,231,135,0.25); }
-    .chat-panel.bob    { border-color: var(--border); }
-    .chat-panel.bob.active { border-color: rgba(247,120,186,0.25); }
+    .chat-panel.alice {
+      border-color: rgba(126, 231, 135, 0.25);
+    }
+
+    .chat-panel.bob {
+      border-color: var(--border);
+    }
+
+    .chat-panel.bob.active {
+      border-color: rgba(247, 120, 186, 0.25);
+    }
 
     .chat-header {
       padding: 11px 14px;
@@ -160,26 +225,59 @@
       flex-shrink: 0;
     }
 
-    .chat-header.alice { background: linear-gradient(90deg, rgba(126,231,135,0.07), transparent); }
-    .chat-header.bob   { background: linear-gradient(90deg, rgba(247,120,186,0.07), transparent); }
+    .chat-header.alice {
+      background: linear-gradient(90deg, rgba(126, 231, 135, 0.07), transparent);
+    }
+
+    .chat-header.bob {
+      background: linear-gradient(90deg, rgba(247, 120, 186, 0.07), transparent);
+    }
 
     .avatar {
-      width: 32px; height: 32px;
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 700; font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 13px;
       flex-shrink: 0;
     }
 
-    .avatar.alice { background: rgba(126,231,135,0.12); color: var(--alice); border: 2px solid var(--alice); }
-    .avatar.bob   { background: rgba(247,120,186,0.12); color: var(--bob);   border: 2px solid var(--bob); }
+    .avatar.alice {
+      background: rgba(126, 231, 135, 0.12);
+      color: var(--alice);
+      border: 2px solid var(--alice);
+    }
 
-    .header-info h3 { font-size: 13px; font-weight: 600; }
-    .alice h3 { color: var(--alice); }
-    .bob   h3 { color: var(--bob); }
-    .header-info .status { font-size: 11px; color: var(--text-muted); }
+    .avatar.bob {
+      background: rgba(247, 120, 186, 0.12);
+      color: var(--bob);
+      border: 2px solid var(--bob);
+    }
 
-    .header-actions { margin-left: auto; }
+    .header-info h3 {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .alice h3 {
+      color: var(--alice);
+    }
+
+    .bob h3 {
+      color: var(--bob);
+    }
+
+    .header-info .status {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      margin-left: auto;
+    }
 
     /* Messages */
     .chat-messages {
@@ -191,8 +289,14 @@
       gap: 8px;
     }
 
-    .chat-messages::-webkit-scrollbar { width: 3px; }
-    .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .chat-messages::-webkit-scrollbar {
+      width: 3px;
+    }
+
+    .chat-messages::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 2px;
+    }
 
     .msg-row {
       display: flex;
@@ -201,13 +305,28 @@
     }
 
     @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(4px); }
-      to   { opacity: 1; transform: translateY(0); }
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
-    .msg-row.self    { align-items: flex-end; }
-    .msg-row.other   { align-items: flex-start; }
-    .msg-row.sys-row { align-items: center; }
+    .msg-row.self {
+      align-items: flex-end;
+    }
+
+    .msg-row.other {
+      align-items: flex-start;
+    }
+
+    .msg-row.sys-row {
+      align-items: center;
+    }
 
     .bubble {
       max-width: 84%;
@@ -219,11 +338,31 @@
       white-space: pre-wrap;
     }
 
-    .bubble.alice-self  { background: var(--alice-dim);  border: 1px solid var(--alice-border); }
-    .bubble.bob-self    { background: var(--bob-dim);    border: 1px solid var(--bob-border); }
-    .bubble.claude      { background: var(--claude-dim); border: 1px solid var(--claude-border); }
-    .bubble.alice-other { background: rgba(126,231,135,0.05); border: 1px solid rgba(126,231,135,0.15); }
-    .bubble.bob-other   { background: rgba(247,120,186,0.05); border: 1px solid rgba(247,120,186,0.15); }
+    .bubble.alice-self {
+      background: var(--alice-dim);
+      border: 1px solid var(--alice-border);
+    }
+
+    .bubble.bob-self {
+      background: var(--bob-dim);
+      border: 1px solid var(--bob-border);
+    }
+
+    .bubble.claude {
+      background: var(--claude-dim);
+      border: 1px solid var(--claude-border);
+    }
+
+    .bubble.alice-other {
+      background: rgba(126, 231, 135, 0.05);
+      border: 1px solid rgba(126, 231, 135, 0.15);
+    }
+
+    .bubble.bob-other {
+      background: rgba(247, 120, 186, 0.05);
+      border: 1px solid rgba(247, 120, 186, 0.15);
+    }
+
     .bubble.sys-msg {
       background: transparent;
       border: 1px dashed var(--border);
@@ -241,12 +380,25 @@
       padding: 0 2px;
     }
 
-    .msg-meta .who { font-weight: 600; }
-    .who.alice  { color: var(--alice); }
-    .who.bob    { color: var(--bob); }
-    .who.claude { color: var(--claude); }
+    .msg-meta .who {
+      font-weight: 600;
+    }
 
-    .msg-row.self .msg-meta { text-align: right; }
+    .who.alice {
+      color: var(--alice);
+    }
+
+    .who.bob {
+      color: var(--bob);
+    }
+
+    .who.claude {
+      color: var(--claude);
+    }
+
+    .msg-row.self .msg-meta {
+      text-align: right;
+    }
 
     /* Typing */
     .typing {
@@ -257,18 +409,34 @@
     }
 
     .typing span {
-      width: 5px; height: 5px;
+      width: 5px;
+      height: 5px;
       border-radius: 50%;
       background: var(--claude);
       animation: bounce 1s ease infinite;
     }
 
-    .typing span:nth-child(2) { animation-delay: 0.15s; }
-    .typing span:nth-child(3) { animation-delay: 0.3s; }
+    .typing span:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    .typing span:nth-child(3) {
+      animation-delay: 0.3s;
+    }
 
     @keyframes bounce {
-      0%,60%,100% { transform: translateY(0); opacity: 0.4; }
-      30% { transform: translateY(-5px); opacity: 1; }
+
+      0%,
+      60%,
+      100% {
+        transform: translateY(0);
+        opacity: 0.4;
+      }
+
+      30% {
+        transform: translateY(-5px);
+        opacity: 1;
+      }
     }
 
     /* Input areas */
@@ -298,8 +466,13 @@
       transition: border-color 0.15s;
     }
 
-    .chat-input input:focus { border-color: var(--accent); }
-    .chat-input input:disabled { opacity: 0.3; }
+    .chat-input input:focus {
+      border-color: var(--accent);
+    }
+
+    .chat-input input:disabled {
+      opacity: 0.3;
+    }
 
     .send-btn {
       padding: 7px 13px;
@@ -311,9 +484,20 @@
       transition: opacity 0.15s;
     }
 
-    .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-    .send-btn.alice { background: var(--alice); color: #000; }
-    .send-btn.bob   { background: var(--bob);   color: #000; }
+    .send-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .send-btn.alice {
+      background: var(--alice);
+      color: #000;
+    }
+
+    .send-btn.bob {
+      background: var(--bob);
+      color: #000;
+    }
 
     .writeback-row {
       display: flex;
@@ -333,8 +517,13 @@
       outline: none;
     }
 
-    .writeback-row input:focus { border-color: var(--bob); }
-    .writeback-row input:disabled { opacity: 0.3; }
+    .writeback-row input:focus {
+      border-color: var(--bob);
+    }
+
+    .writeback-row input:disabled {
+      opacity: 0.3;
+    }
 
     .writeback-label {
       font-size: 10px;
@@ -355,548 +544,558 @@
       padding: 20px;
     }
 
-    .panel-placeholder .icon { font-size: 36px; opacity: 0.4; }
-    .panel-placeholder p { text-align: center; line-height: 1.6; }
+    .panel-placeholder .icon {
+      font-size: 36px;
+      opacity: 0.4;
+    }
+
+    .panel-placeholder p {
+      text-align: center;
+      line-height: 1.6;
+    }
   </style>
 </head>
+
 <body>
-<div class="container">
-  <header>
-    <h1>CC-Portal Chat Demo</h1>
-    <p class="subtitle">Alice 输入 "+Bob 任务描述" 即可委派任务给 Bob，Bob 在独立 Session 中处理并写回结果</p>
-  </header>
+  <div class="container">
+    <header>
+      <h1>CC-Portal Chat Demo</h1>
+      <p class="subtitle">Alice 输入 "+Bob 任务描述" 即可委派任务给 Bob，Bob 在独立 Session 中处理并写回结果</p>
+    </header>
 
-  <div class="flow-card">
-    <div class="flow-step">
-      <span class="num">1</span>
-      Alice 点击「开始演示」创建 Session
-    </div>
-    <div class="flow-step">
-      <span class="num">2</span>
-      Alice 输入 <code>+Bob 查下深圳的天气预报</code>
-    </div>
-    <div class="flow-step">
-      <span class="num">3</span>
-      Bob 界面激活，收到任务上下文
-    </div>
-    <div class="flow-step">
-      <span class="num">4</span>
-      Bob 处理任务并写回 → <code>POST /sessions/:alice-id/messages</code>
-    </div>
-  </div>
-
-  <div class="controls">
-    <button class="btn btn-primary" id="btn-start" onclick="startScene()">▶ 开始演示</button>
-    <button class="btn btn-secondary" onclick="resetScene()">↺ 重置</button>
-    <button class="btn btn-danger" onclick="clearSessions()">✕ 清理 Sessions</button>
-  </div>
-
-  <div class="main-grid">
-
-    <!-- Alice Panel -->
-    <div class="chat-panel alice">
-      <div class="chat-header alice">
-        <div class="avatar alice">A</div>
-        <div class="header-info">
-          <h3>Alice <small style="font-weight:400;color:var(--text-muted)">owner</small></h3>
-          <span class="status" id="alice-status">等待开始...</span>
-        </div>
-        <div class="header-actions">
-          <button class="btn btn-secondary" id="btn-delegate" onclick="delegateToBob()"
-                  disabled style="font-size:11px;padding:5px 10px;">
-            → 委派给 Bob
-          </button>
-        </div>
+    <div class="flow-card">
+      <div class="flow-step">
+        <span class="num">1</span>
+        Alice 点击「开始演示」创建 Session
       </div>
-      <div class="chat-messages" id="alice-messages">
-        <div class="msg-row sys-row">
-          <div class="bubble sys-msg">点击「开始演示」创建 Alice 的 Session</div>
-        </div>
+      <div class="flow-step">
+        <span class="num">2</span>
+        Alice 输入 <code>+Bob 查下深圳的天气预报</code>
       </div>
-      <div class="chat-input">
-        <div class="input-row">
-          <input type="text" id="alice-input" placeholder="Alice 发消息..." disabled
-                 onkeydown="if(event.key==='Enter')sendMsg('alice')">
-          <button class="send-btn alice" id="alice-send" onclick="sendMsg('alice')" disabled>发送</button>
-        </div>
+      <div class="flow-step">
+        <span class="num">3</span>
+        Bob 界面激活，收到任务上下文
+      </div>
+      <div class="flow-step">
+        <span class="num">4</span>
+        Bob 处理任务并写回 → <code>POST /sessions/:alice-id/messages</code>
       </div>
     </div>
 
-    <!-- Bob Panel -->
-    <div class="chat-panel bob" id="bob-panel">
-      <div class="chat-header bob">
-        <div class="avatar bob">B</div>
-        <div class="header-info">
-          <h3>Bob <small style="font-weight:400;color:var(--text-muted)" id="bob-role">待激活</small></h3>
-          <span class="status" id="bob-status">等待 Alice 委派任务...</span>
+    <div class="controls">
+      <button class="btn btn-primary" id="btn-start" onclick="startScene()">▶ 开始演示</button>
+      <button class="btn btn-secondary" onclick="resetScene()">↺ 重置</button>
+      <button class="btn btn-danger" onclick="clearSessions()">✕ 清理 Sessions</button>
+    </div>
+
+    <div class="main-grid">
+
+      <!-- Alice Panel -->
+      <div class="chat-panel alice">
+        <div class="chat-header alice">
+          <div class="avatar alice">A</div>
+          <div class="header-info">
+            <h3>Alice <small style="font-weight:400;color:var(--text-muted)">owner</small></h3>
+            <span class="status" id="alice-status">等待开始...</span>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-secondary" id="btn-delegate" onclick="delegateToBob()" disabled
+              style="font-size:11px;padding:5px 10px;">
+              → 委派给 Bob
+            </button>
+          </div>
+        </div>
+        <div class="chat-messages" id="alice-messages">
+          <div class="msg-row sys-row">
+            <div class="bubble sys-msg">点击「开始演示」创建 Alice 的 Session</div>
+          </div>
+        </div>
+        <div class="chat-input">
+          <div class="input-row">
+            <input type="text" id="alice-input" placeholder="Alice 发消息..." disabled
+              onkeydown="if(event.key==='Enter')sendMsg('alice')">
+            <button class="send-btn alice" id="alice-send" onclick="sendMsg('alice')" disabled>发送</button>
+          </div>
         </div>
       </div>
 
-      <!-- Placeholder (before delegation) -->
-      <div class="panel-placeholder" id="bob-placeholder">
-        <div class="icon">🤖</div>
-        <p>当 Alice 点击「委派给 Bob」时<br>这里会创建 Bob 的独立 Session<br>并在此显示任务上下文</p>
-      </div>
-
-      <!-- Active chat (after delegation) -->
-      <div class="chat-messages" id="bob-messages" style="display:none"></div>
-
-      <div class="chat-input" id="bob-input-area" style="display:none">
-        <div class="input-row">
-          <input type="text" id="bob-input" placeholder="Bob 在自己的 Session 发消息..." disabled
-                 onkeydown="if(event.key==='Enter')sendMsg('bob')">
-          <button class="send-btn bob" id="bob-send" onclick="sendMsg('bob')" disabled>发送</button>
+      <!-- Bob Panel -->
+      <div class="chat-panel bob" id="bob-panel">
+        <div class="chat-header bob">
+          <div class="avatar bob">B</div>
+          <div class="header-info">
+            <h3>Bob <small style="font-weight:400;color:var(--text-muted)" id="bob-role">待激活</small></h3>
+            <span class="status" id="bob-status">等待 Alice 委派任务...</span>
+          </div>
         </div>
-        <div class="writeback-row" id="writeback-area" style="display:none">
-          <div style="display:flex;flex-direction:column;flex:1;gap:3px">
-            <span class="writeback-label">↩ 写回 Alice 的 Session（Bob 作为 participant）</span>
-            <div style="display:flex;gap:6px">
-              <input type="text" id="writeback-input" placeholder="向 Alice 发送结果..."
-                     onkeydown="if(event.key==='Enter')writeBackToAlice()">
-              <button class="send-btn alice" onclick="writeBackToAlice()" style="font-size:11px;white-space:nowrap">→ Alice</button>
+
+        <!-- Placeholder (before delegation) -->
+        <div class="panel-placeholder" id="bob-placeholder">
+          <div class="icon">🤖</div>
+          <p>当 Alice 点击「委派给 Bob」时<br>这里会创建 Bob 的独立 Session<br>并在此显示任务上下文</p>
+        </div>
+
+        <!-- Active chat (after delegation) -->
+        <div class="chat-messages" id="bob-messages" style="display:none"></div>
+
+        <div class="chat-input" id="bob-input-area" style="display:none">
+          <div class="input-row">
+            <input type="text" id="bob-input" placeholder="Bob 在自己的 Session 发消息..." disabled
+              onkeydown="if(event.key==='Enter')sendMsg('bob')">
+            <button class="send-btn bob" id="bob-send" onclick="sendMsg('bob')" disabled>发送</button>
+          </div>
+          <div class="writeback-row" id="writeback-area" style="display:none">
+            <div style="display:flex;flex-direction:column;flex:1;gap:3px">
+              <span class="writeback-label">↩ 写回 Alice 的 Session（Bob 作为 participant）</span>
+              <div style="display:flex;gap:6px">
+                <input type="text" id="writeback-input" placeholder="向 Alice 发送结果..."
+                  onkeydown="if(event.key==='Enter')writeBackToAlice()">
+                <button class="send-btn alice" onclick="writeBackToAlice()" style="font-size:11px;white-space:nowrap">→
+                  Alice</button>
+              </div>
             </div>
           </div>
         </div>
       </div>
+
     </div>
-
   </div>
-</div>
 
-<script>
-  const API = 'http://localhost:3333';
+  <script>
+    const API = 'http://localhost:9033';
 
-  let aliceSessionId = null;
-  let bobSessionId = null;
-  let aliceSending = false;
-  let bobSending = false;
+    let aliceSessionId = null;
+    let bobSessionId = null;
+    let aliceSending = false;
+    let bobSending = false;
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
-  async function req(method, path, body, userId) {
-    const res = await fetch(API + path, {
-      method,
-      headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const data = await res.json().catch(() => ({}));
-    return { ok: res.ok, status: res.status, data };
-  }
-
-  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-  function ts() {
-    return new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  }
-
-  function escHtml(s) {
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-  }
-
-  function setStatus(user, txt) {
-    document.getElementById(user + '-status').textContent = txt;
-  }
-
-  function enableInput(user, on) {
-    document.getElementById(user + '-input').disabled = !on;
-    document.getElementById(user + '-send').disabled = !on;
-  }
-
-  function scrollBottom(panel) {
-    const el = document.getElementById(panel + '-messages');
-    if (el) el.scrollTop = el.scrollHeight;
-  }
-
-  // ── Message rendering ────────────────────────────────────────────────────
-
-  function sysMsg(panel, text) {
-    const el = document.getElementById(panel + '-messages');
-    const row = document.createElement('div');
-    row.className = 'msg-row sys-row';
-    row.innerHTML = `<div class="bubble sys-msg">${escHtml(text)}</div>`;
-    el.appendChild(row);
-    scrollBottom(panel);
-    return row;
-  }
-
-  // Append a user or claude message bubble; returns the bubble element for streaming
-  function appendBubble(panel, who, text, isSelf) {
-    const el = document.getElementById(panel + '-messages');
-    const row = document.createElement('div');
-    row.className = 'msg-row ' + (who === 'claude' ? 'other' : isSelf ? 'self' : 'other');
-
-    let bubbleClass, whoClass, whoLabel;
-    if (who === 'claude') {
-      bubbleClass = 'claude'; whoClass = 'claude'; whoLabel = 'Claude';
-    } else if (who === 'alice') {
-      bubbleClass = isSelf ? 'alice-self' : 'alice-other';
-      whoClass = 'alice'; whoLabel = 'Alice';
-    } else {
-      bubbleClass = isSelf ? 'bob-self' : 'bob-other';
-      whoClass = 'bob'; whoLabel = 'Bob';
+    async function req(method, path, body, userId) {
+      const res = await fetch(API + path, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok, status: res.status, data };
     }
 
-    const bubble = document.createElement('div');
-    bubble.className = 'bubble ' + bubbleClass;
-    bubble.textContent = text || '';
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-    row.innerHTML = `<div class="msg-meta"><span class="who ${whoClass}">${whoLabel}</span> <span>${ts()}</span></div>`;
-    row.appendChild(bubble);
-    el.appendChild(row);
-    scrollBottom(panel);
-    return bubble;
-  }
+    function ts() {
+      return new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
 
-  function typingBubble(panel) {
-    const el = document.getElementById(panel + '-messages');
-    const row = document.createElement('div');
-    row.className = 'msg-row other';
-    row.id = panel + '-typing';
-    row.innerHTML = `<div class="msg-meta"><span class="who claude">Claude</span></div>
+    function escHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function setStatus(user, txt) {
+      document.getElementById(user + '-status').textContent = txt;
+    }
+
+    function enableInput(user, on) {
+      document.getElementById(user + '-input').disabled = !on;
+      document.getElementById(user + '-send').disabled = !on;
+    }
+
+    function scrollBottom(panel) {
+      const el = document.getElementById(panel + '-messages');
+      if (el) el.scrollTop = el.scrollHeight;
+    }
+
+    // ── Message rendering ────────────────────────────────────────────────────
+
+    function sysMsg(panel, text) {
+      const el = document.getElementById(panel + '-messages');
+      const row = document.createElement('div');
+      row.className = 'msg-row sys-row';
+      row.innerHTML = `<div class="bubble sys-msg">${escHtml(text)}</div>`;
+      el.appendChild(row);
+      scrollBottom(panel);
+      return row;
+    }
+
+    // Append a user or claude message bubble; returns the bubble element for streaming
+    function appendBubble(panel, who, text, isSelf) {
+      const el = document.getElementById(panel + '-messages');
+      const row = document.createElement('div');
+      row.className = 'msg-row ' + (who === 'claude' ? 'other' : isSelf ? 'self' : 'other');
+
+      let bubbleClass, whoClass, whoLabel;
+      if (who === 'claude') {
+        bubbleClass = 'claude'; whoClass = 'claude'; whoLabel = 'Claude';
+      } else if (who === 'alice') {
+        bubbleClass = isSelf ? 'alice-self' : 'alice-other';
+        whoClass = 'alice'; whoLabel = 'Alice';
+      } else {
+        bubbleClass = isSelf ? 'bob-self' : 'bob-other';
+        whoClass = 'bob'; whoLabel = 'Bob';
+      }
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble ' + bubbleClass;
+      bubble.textContent = text || '';
+
+      row.innerHTML = `<div class="msg-meta"><span class="who ${whoClass}">${whoLabel}</span> <span>${ts()}</span></div>`;
+      row.appendChild(bubble);
+      el.appendChild(row);
+      scrollBottom(panel);
+      return bubble;
+    }
+
+    function typingBubble(panel) {
+      const el = document.getElementById(panel + '-messages');
+      const row = document.createElement('div');
+      row.className = 'msg-row other';
+      row.id = panel + '-typing';
+      row.innerHTML = `<div class="msg-meta"><span class="who claude">Claude</span></div>
       <div class="bubble claude"><div class="typing"><span></span><span></span><span></span></div></div>`;
-    el.appendChild(row);
-    scrollBottom(panel);
-    return row;
-  }
+      el.appendChild(row);
+      scrollBottom(panel);
+      return row;
+    }
 
-  function removeTyping(panel) {
-    const el = document.getElementById(panel + '-typing');
-    if (el) el.remove();
-  }
+    function removeTyping(panel) {
+      const el = document.getElementById(panel + '-typing');
+      if (el) el.remove();
+    }
 
-  // ── SSE streaming ─────────────────────────────────────────────────────────
-  // Uses ?userId= query param because EventSource doesn't support custom headers
+    // ── SSE streaming ─────────────────────────────────────────────────────────
+    // Uses ?userId= query param because EventSource doesn't support custom headers
 
-  function streamMessage(sessionId, userId, message, panel, senderUser) {
-    return new Promise((resolve, reject) => {
-      // Show sender's message
-      appendBubble(panel, senderUser, message, senderUser === userId);
+    function streamMessage(sessionId, userId, message, panel, senderUser) {
+      return new Promise((resolve, reject) => {
+        // Show sender's message
+        appendBubble(panel, senderUser, message, senderUser === userId);
 
-      // Show typing indicator
-      const typingEl = typingBubble(panel);
+        // Show typing indicator
+        const typingEl = typingBubble(panel);
 
-      const url = `${API}/sessions/${encodeURIComponent(sessionId)}/stream` +
-                  `?userId=${encodeURIComponent(userId)}` +
-                  `&message=${encodeURIComponent(message)}`;
+        const url = `${API}/sessions/${encodeURIComponent(sessionId)}/stream` +
+          `?userId=${encodeURIComponent(userId)}` +
+          `&message=${encodeURIComponent(message)}`;
 
-      const evtSrc = new EventSource(url);
-      let accumText = '';
-      let claudeBubble = null;
+        const evtSrc = new EventSource(url);
+        let accumText = '';
+        let claudeBubble = null;
 
-      evtSrc.onmessage = (e) => {
-        if (e.data === '[DONE]') {
-          evtSrc.close();
-          resolve(accumText);
-          return;
-        }
-
-        let chunk;
-        try { chunk = JSON.parse(e.data); } catch { return; }
-
-        if (chunk.error) {
-          typingEl.remove();
-          removeTyping(panel);
-          sysMsg(panel, '错误: ' + chunk.error);
-          evtSrc.close();
-          reject(new Error(chunk.error));
-          return;
-        }
-
-        if (chunk.type === 'text' && chunk.content) {
-          if (!claudeBubble) {
-            typingEl.remove();
-            claudeBubble = appendBubble(panel, 'claude', '', false);
+        evtSrc.onmessage = (e) => {
+          if (e.data === '[DONE]') {
+            evtSrc.close();
+            resolve(accumText);
+            return;
           }
-          accumText += chunk.content;
-          claudeBubble.textContent = accumText;
-          scrollBottom(panel);
+
+          let chunk;
+          try { chunk = JSON.parse(e.data); } catch { return; }
+
+          if (chunk.error) {
+            typingEl.remove();
+            removeTyping(panel);
+            sysMsg(panel, '错误: ' + chunk.error);
+            evtSrc.close();
+            reject(new Error(chunk.error));
+            return;
+          }
+
+          if (chunk.type === 'text' && chunk.content) {
+            if (!claudeBubble) {
+              typingEl.remove();
+              claudeBubble = appendBubble(panel, 'claude', '', false);
+            }
+            accumText += chunk.content;
+            claudeBubble.textContent = accumText;
+            scrollBottom(panel);
+          }
+        };
+
+        evtSrc.onerror = () => {
+          evtSrc.close();
+          typingEl.remove();
+          if (!accumText) {
+            sysMsg(panel, '⚠️ 连接中断');
+            reject(new Error('SSE error'));
+          } else {
+            resolve(accumText);
+          }
+        };
+      });
+    }
+
+    // ── Send message ──────────────────────────────────────────────────────────
+
+    async function sendMsg(user) {
+      const sessionId = user === 'alice' ? aliceSessionId : bobSessionId;
+      if (!sessionId) return;
+
+      const input = document.getElementById(user + '-input');
+      let message = input.value.trim();
+      if (!message) return;
+      if (user === 'alice' && aliceSending) return;
+      if (user === 'bob' && bobSending) return;
+
+      // Check for "+Bob" pattern in Alice's message (e.g., "+Bob 查下深圳的天气预报")
+      if (user === 'alice' && !bobSessionId) {
+        const match = message.match(/^\+Bob\s*(.*)/);
+        if (match) {
+          input.value = '';
+          // Extract task description after "+Bob"
+          const taskContext = match[1] || '请协助分析并完成一项任务。';
+          // Send the message to Alice's session first
+          appendBubble('alice', 'alice', message, true);
+          // Then delegate to Bob
+          await delegateToBob(taskContext);
+          return;
         }
-      };
+      }
 
-      evtSrc.onerror = () => {
-        evtSrc.close();
-        typingEl.remove();
-        if (!accumText) {
-          sysMsg(panel, '⚠️ 连接中断');
-          reject(new Error('SSE error'));
-        } else {
-          resolve(accumText);
-        }
-      };
-    });
-  }
+      input.value = '';
+      if (user === 'alice') aliceSending = true; else bobSending = true;
+      enableInput(user, false);
+      setStatus(user, '发送中...');
 
-  // ── Send message ──────────────────────────────────────────────────────────
+      try {
+        await streamMessage(sessionId, user, message, user, user);
+        setStatus(user, '在线');
+      } catch (e) {
+        setStatus(user, '发送失败');
+      }
 
-  async function sendMsg(user) {
-    const sessionId = user === 'alice' ? aliceSessionId : bobSessionId;
-    if (!sessionId) return;
+      if (user === 'alice') aliceSending = false; else bobSending = false;
+      enableInput(user, true);
+      document.getElementById(user + '-input').focus();
+    }
 
-    const input = document.getElementById(user + '-input');
-    let message = input.value.trim();
-    if (!message) return;
-    if (user === 'alice' && aliceSending) return;
-    if (user === 'bob'   && bobSending)   return;
+    // ── Delegate to Bob ───────────────────────────────────────────────────────
 
-    // Check for "+Bob" pattern in Alice's message (e.g., "+Bob 查下深圳的天气预报")
-    if (user === 'alice' && !bobSessionId) {
-      const match = message.match(/^\+Bob\s*(.*)/);
-      if (match) {
-        input.value = '';
-        // Extract task description after "+Bob"
-        const taskContext = match[1] || '请协助分析并完成一项任务。';
-        // Send the message to Alice's session first
-        appendBubble('alice', 'alice', message, true);
-        // Then delegate to Bob
-        await delegateToBob(taskContext);
+    async function delegateToBob(taskContext) {
+      if (!aliceSessionId || bobSessionId) return;
+
+      document.getElementById('btn-delegate').disabled = true;
+      setStatus('alice', '委派任务给 Bob...');
+
+      // Use provided context or get from last message
+      if (!taskContext) {
+        const messages = document.querySelectorAll('#alice-messages .bubble:not(.sys-msg)');
+        taskContext = messages.length > 0 ? messages[messages.length - 1].textContent.trim().slice(0, 200) : '请协助分析并完成一项任务。';
+      }
+
+      const taskMsg = `[来自 Alice 的委派任务]\n${taskContext}\n\n请完成后将结果告知 Alice。`;
+
+      // Step 1: Create Bob's independent session (owned by bob, initiated by alice)
+      const createR = await req('POST', '/sessions', {
+        ownerId: 'bob',
+        project: 'delegated-task',
+        bypassPermission: true,
+      }, 'alice');
+
+      if (!createR.ok) {
+        sysMsg('alice', '❌ 委派失败：' + JSON.stringify(createR.data));
+        document.getElementById('btn-delegate').disabled = false;
+        setStatus('alice', '在线');
         return;
       }
-    }
 
-    input.value = '';
-    if (user === 'alice') aliceSending = true; else bobSending = true;
-    enableInput(user, false);
-    setStatus(user, '发送中...');
+      bobSessionId = createR.data.sessionId;
+      sysMsg('alice', `✅ 已委派任务给 Bob (session: ${bobSessionId.slice(0, 8)}...)`);
 
-    try {
-      await streamMessage(sessionId, user, message, user, user);
-      setStatus(user, '在线');
-    } catch (e) {
-      setStatus(user, '发送失败');
-    }
+      // Step 2: Add Bob as participant in Alice's session so he can write back
+      await req('POST', `/sessions/${aliceSessionId}/participants`, { userId: 'bob' }, 'alice');
 
-    if (user === 'alice') aliceSending = false; else bobSending = false;
-    enableInput(user, true);
-    document.getElementById(user + '-input').focus();
-  }
+      // Step 3: Activate Bob's panel
+      document.getElementById('bob-placeholder').style.display = 'none';
+      document.getElementById('bob-messages').style.display = 'flex';
+      document.getElementById('bob-input-area').style.display = 'flex';
+      document.getElementById('bob-panel').classList.add('active');
+      document.getElementById('bob-role').textContent = 'delegated session';
+      document.getElementById('writeback-area').style.display = 'none'; // Auto writeback
 
-  // ── Delegate to Bob ───────────────────────────────────────────────────────
+      setStatus('bob', '收到任务，Claude 处理中...');
 
-  async function delegateToBob(taskContext) {
-    if (!aliceSessionId || bobSessionId) return;
+      // Step 4: Show task context in Bob's panel and stream to Bob's session
+      appendBubble('bob', 'alice', taskMsg, false);
+      sysMsg('bob', 'Claude 正在处理任务...');
 
-    document.getElementById('btn-delegate').disabled = true;
-    setStatus('alice', '委派任务给 Bob...');
+      // Step 5: Stream the task to Bob's session and get Claude's response
+      try {
+        await streamMessage(bobSessionId, 'bob', taskMsg, 'bob', 'bob');
+        sysMsg('bob', '✅ Claude 已完成任务');
+        setStatus('bob', '任务完成');
 
-    // Use provided context or get from last message
-    if (!taskContext) {
-      const messages = document.querySelectorAll('#alice-messages .bubble:not(.sys-msg)');
-      taskContext = messages.length > 0 ? messages[messages.length - 1].textContent.trim().slice(0, 200) : '请协助分析并完成一项任务。';
-    }
-
-    const taskMsg = `[来自 Alice 的委派任务]\n${taskContext}\n\n请完成后将结果告知 Alice。`;
-
-    // Step 1: Create Bob's independent session (owned by bob, initiated by alice)
-    const createR = await req('POST', '/sessions', {
-      ownerId: 'bob',
-      project: 'delegated-task',
-      bypassPermission: true,
-    }, 'alice');
-
-    if (!createR.ok) {
-      sysMsg('alice', '❌ 委派失败：' + JSON.stringify(createR.data));
-      document.getElementById('btn-delegate').disabled = false;
-      setStatus('alice', '在线');
-      return;
-    }
-
-    bobSessionId = createR.data.sessionId;
-    sysMsg('alice', `✅ 已委派任务给 Bob (session: ${bobSessionId.slice(0,8)}...)`);
-
-    // Step 2: Add Bob as participant in Alice's session so he can write back
-    await req('POST', `/sessions/${aliceSessionId}/participants`, { userId: 'bob' }, 'alice');
-
-    // Step 3: Activate Bob's panel
-    document.getElementById('bob-placeholder').style.display = 'none';
-    document.getElementById('bob-messages').style.display = 'flex';
-    document.getElementById('bob-input-area').style.display = 'flex';
-    document.getElementById('bob-panel').classList.add('active');
-    document.getElementById('bob-role').textContent = 'delegated session';
-    document.getElementById('writeback-area').style.display = 'none'; // Auto writeback
-
-    setStatus('bob', '收到任务，Claude 处理中...');
-
-    // Step 4: Show task context in Bob's panel and stream to Bob's session
-    appendBubble('bob', 'alice', taskMsg, false);
-    sysMsg('bob', 'Claude 正在处理任务...');
-
-    // Step 5: Stream the task to Bob's session and get Claude's response
-    try {
-      await streamMessage(bobSessionId, 'bob', taskMsg, 'bob', 'bob');
-      sysMsg('bob', '✅ Claude 已完成任务');
-      setStatus('bob', '任务完成');
-
-      // Step 6: Auto-get the result and write back to Alice
-      await sleep(500);
-      const bobMessages = document.querySelectorAll('#bob-messages .bubble:not(.sys-msg)');
-      if (bobMessages.length > 0) {
-        const lastMsg = bobMessages[bobMessages.length - 1].textContent.trim();
-        await autoWriteBackToAlice(lastMsg);
+        // Step 6: Auto-get the result and write back to Alice
+        await sleep(500);
+        const bobMessages = document.querySelectorAll('#bob-messages .bubble:not(.sys-msg)');
+        if (bobMessages.length > 0) {
+          const lastMsg = bobMessages[bobMessages.length - 1].textContent.trim();
+          await autoWriteBackToAlice(lastMsg);
+        }
+      } catch (e) {
+        sysMsg('bob', '⚠️ 处理失败：' + e.message);
+        setStatus('bob', '处理失败');
       }
-    } catch (e) {
-      sysMsg('bob', '⚠️ 处理失败：' + e.message);
-      setStatus('bob', '处理失败');
-    }
 
-    setStatus('alice', '收到 Bob 的回复');
-  }
-
-  // ── Auto write back to Alice (no manual action needed) ──────────────────────
-
-  async function autoWriteBackToAlice(message) {
-    if (!aliceSessionId || !bobSessionId) return;
-
-    setStatus('bob', '写回给 Alice...');
-
-    const r = await req('POST', `/sessions/${aliceSessionId}/messages`, {
-      message: message,
-      from: 'bob',
-    }, 'bob');
-
-    if (r.ok) {
-      sysMsg('bob', `✅ 已自动写回 Alice`);
-      appendBubble('alice', 'bob', message, false);
-      if (r.data.response) {
-        appendBubble('alice', 'claude', r.data.response, false);
-      }
-      setStatus('bob', '写回完成');
       setStatus('alice', '收到 Bob 的回复');
-    } else {
-      sysMsg('bob', '❌ 写回失败：' + JSON.stringify(r.data));
-      setStatus('bob', '写回失败');
     }
-  }
 
-  // ── Manual Bob writes back to Alice (for demo purposes) ───────────────────────
+    // ── Auto write back to Alice (no manual action needed) ──────────────────────
 
-  async function writeBackToAlice() {
-    if (!aliceSessionId || !bobSessionId) return;
+    async function autoWriteBackToAlice(message) {
+      if (!aliceSessionId || !bobSessionId) return;
 
-    const input = document.getElementById('writeback-input');
-    const message = input.value.trim();
-    if (!message) return;
+      setStatus('bob', '写回给 Alice...');
 
-    input.disabled = true;
-    setStatus('bob', '写回给 Alice...');
+      const r = await req('POST', `/sessions/${aliceSessionId}/messages`, {
+        message: message,
+        from: 'bob',
+      }, 'bob');
 
-    const r = await req('POST', `/sessions/${aliceSessionId}/messages`, {
-      message: message,
-      from: 'bob',
-    }, 'bob');
-
-    if (r.ok) {
-      sysMsg('bob', `✅ 已写回 Alice: "${message.slice(0, 50)}${message.length > 50 ? '...' : ''}"`);
-      appendBubble('alice', 'bob', message, false);
-      if (r.data.response) {
-        appendBubble('alice', 'claude', r.data.response, false);
+      if (r.ok) {
+        sysMsg('bob', `✅ 已自动写回 Alice`);
+        appendBubble('alice', 'bob', message, false);
+        if (r.data.response) {
+          appendBubble('alice', 'claude', r.data.response, false);
+        }
+        setStatus('bob', '写回完成');
+        setStatus('alice', '收到 Bob 的回复');
+      } else {
+        sysMsg('bob', '❌ 写回失败：' + JSON.stringify(r.data));
+        setStatus('bob', '写回失败');
       }
-      input.value = '';
-      setStatus('bob', '写回完成');
-      setStatus('alice', '收到 Bob 的写回');
-    } else {
-      sysMsg('bob', '❌ 写回失败：' + JSON.stringify(r.data));
-      setStatus('bob', '写回失败');
     }
 
-    input.disabled = false;
-  }
+    // ── Manual Bob writes back to Alice (for demo purposes) ───────────────────────
 
-  // ── Start scene ───────────────────────────────────────────────────────────
+    async function writeBackToAlice() {
+      if (!aliceSessionId || !bobSessionId) return;
 
-  async function startScene() {
-    document.getElementById('btn-start').disabled = true;
+      const input = document.getElementById('writeback-input');
+      const message = input.value.trim();
+      if (!message) return;
 
-    // Step 1: Create Alice's session
-    const r = await req('POST', '/sessions', {
-      ownerId: 'alice',
-      project: 'alice-workspace',
-      bypassPermission: true
-    }, 'alice');
+      input.disabled = true;
+      setStatus('bob', '写回给 Alice...');
 
-    if (!r.ok) {
-      alert('创建失败：' + JSON.stringify(r.data));
+      const r = await req('POST', `/sessions/${aliceSessionId}/messages`, {
+        message: message,
+        from: 'bob',
+      }, 'bob');
+
+      if (r.ok) {
+        sysMsg('bob', `✅ 已写回 Alice: "${message.slice(0, 50)}${message.length > 50 ? '...' : ''}"`);
+        appendBubble('alice', 'bob', message, false);
+        if (r.data.response) {
+          appendBubble('alice', 'claude', r.data.response, false);
+        }
+        input.value = '';
+        setStatus('bob', '写回完成');
+        setStatus('alice', '收到 Bob 的写回');
+      } else {
+        sysMsg('bob', '❌ 写回失败：' + JSON.stringify(r.data));
+        setStatus('bob', '写回失败');
+      }
+
+      input.disabled = false;
+    }
+
+    // ── Start scene ───────────────────────────────────────────────────────────
+
+    async function startScene() {
+      document.getElementById('btn-start').disabled = true;
+
+      // Step 1: Create Alice's session
+      const r = await req('POST', '/sessions', {
+        ownerId: 'alice',
+        project: 'alice-workspace',
+        bypassPermission: true
+      }, 'alice');
+
+      if (!r.ok) {
+        alert('创建失败：' + JSON.stringify(r.data));
+        document.getElementById('btn-start').disabled = false;
+        return;
+      }
+
+      aliceSessionId = r.data.sessionId;
+      document.getElementById('alice-messages').innerHTML = '';
+      sysMsg('alice', `✅ Session 已创建：${aliceSessionId.slice(0, 8)}...`);
+
+      setStatus('alice', '发送初始消息...');
+      enableInput('alice', false);
+
+      // Step 2: Automatically send the initial delegation message
+      await sleep(800);
+
+      const initialMessage = '+Bob 查下深圳的天气预报';
+      appendBubble('alice', 'alice', initialMessage, true);
+      sysMsg('alice', '📤 已发送委派消息，等待 Claude 处理...');
+
+      // Stream the message to get Claude's response
+      try {
+        await streamMessage(aliceSessionId, 'alice', initialMessage, 'alice', 'alice');
+        sysMsg('alice', '💡 委派任务处理中...');
+      } catch (e) {
+        sysMsg('alice', '⚠️ 发送消息失败：' + e.message);
+      }
+
+      // Step 3: Delegate to Bob
+      await delegateToBob('查下深圳的天气预报');
+
+      enableInput('alice', true);
+      document.getElementById('alice-input').focus();
+    }
+
+    // ── Reset / Clear ─────────────────────────────────────────────────────────
+
+    async function resetScene() {
+      if (aliceSessionId) {
+        await req('DELETE', `/sessions/${aliceSessionId}`, null, 'alice').catch(() => { });
+      }
+      if (bobSessionId) {
+        await req('DELETE', `/sessions/${bobSessionId}`, null, 'bob').catch(() => { });
+      }
+
+      aliceSessionId = null;
+      bobSessionId = null;
+      aliceSending = false;
+      bobSending = false;
+
+      document.getElementById('alice-messages').innerHTML =
+        '<div class="msg-row sys-row"><div class="bubble sys-msg">点击「开始演示」创建 Alice 的 Session</div></div>';
+      document.getElementById('bob-messages').innerHTML = '';
+      document.getElementById('bob-messages').style.display = 'none';
+      document.getElementById('bob-placeholder').style.display = 'flex';
+      document.getElementById('bob-input-area').style.display = 'none';
+      document.getElementById('bob-panel').classList.remove('active');
+      document.getElementById('bob-role').textContent = '待激活';
+      document.getElementById('writeback-area').style.display = 'none';
+      document.getElementById('writeback-input').value = '';
+
+      setStatus('alice', '等待开始...');
+      setStatus('bob', '等待 Alice 委派任务...');
+      enableInput('alice', false);
+      enableInput('bob', false);
       document.getElementById('btn-start').disabled = false;
-      return;
+      document.getElementById('btn-delegate').disabled = true;
     }
 
-    aliceSessionId = r.data.sessionId;
-    document.getElementById('alice-messages').innerHTML = '';
-    sysMsg('alice', `✅ Session 已创建：${aliceSessionId.slice(0,8)}...`);
-
-    setStatus('alice', '发送初始消息...');
-    enableInput('alice', false);
-
-    // Step 2: Automatically send the initial delegation message
-    await sleep(800);
-
-    const initialMessage = '+Bob 查下深圳的天气预报';
-    appendBubble('alice', 'alice', initialMessage, true);
-    sysMsg('alice', '📤 已发送委派消息，等待 Claude 处理...');
-
-    // Stream the message to get Claude's response
-    try {
-      await streamMessage(aliceSessionId, 'alice', initialMessage, 'alice', 'alice');
-      sysMsg('alice', '💡 委派任务处理中...');
-    } catch (e) {
-      sysMsg('alice', '⚠️ 发送消息失败：' + e.message);
-    }
-
-    // Step 3: Delegate to Bob
-    await delegateToBob('查下深圳的天气预报');
-
-    enableInput('alice', true);
-    document.getElementById('alice-input').focus();
-  }
-
-  // ── Reset / Clear ─────────────────────────────────────────────────────────
-
-  async function resetScene() {
-    if (aliceSessionId) {
-      await req('DELETE', `/sessions/${aliceSessionId}`, null, 'alice').catch(() => {});
-    }
-    if (bobSessionId) {
-      await req('DELETE', `/sessions/${bobSessionId}`, null, 'bob').catch(() => {});
-    }
-
-    aliceSessionId = null;
-    bobSessionId = null;
-    aliceSending = false;
-    bobSending = false;
-
-    document.getElementById('alice-messages').innerHTML =
-      '<div class="msg-row sys-row"><div class="bubble sys-msg">点击「开始演示」创建 Alice 的 Session</div></div>';
-    document.getElementById('bob-messages').innerHTML = '';
-    document.getElementById('bob-messages').style.display = 'none';
-    document.getElementById('bob-placeholder').style.display = 'flex';
-    document.getElementById('bob-input-area').style.display = 'none';
-    document.getElementById('bob-panel').classList.remove('active');
-    document.getElementById('bob-role').textContent = '待激活';
-    document.getElementById('writeback-area').style.display = 'none';
-    document.getElementById('writeback-input').value = '';
-
-    setStatus('alice', '等待开始...');
-    setStatus('bob', '等待 Alice 委派任务...');
-    enableInput('alice', false);
-    enableInput('bob', false);
-    document.getElementById('btn-start').disabled = false;
-    document.getElementById('btn-delegate').disabled = true;
-  }
-
-  async function clearSessions() {
-    if (!confirm('清理 alice 和 bob 的所有 Sessions？')) return;
-    for (const u of ['alice', 'bob']) {
-      const r = await req('GET', '/sessions', null, u);
-      if (r.ok && r.data.sessions) {
-        for (const s of r.data.sessions) {
-          await req('DELETE', `/sessions/${s.sessionId || s.id}`, null, u);
+    async function clearSessions() {
+      if (!confirm('清理 alice 和 bob 的所有 Sessions？')) return;
+      for (const u of ['alice', 'bob']) {
+        const r = await req('GET', '/sessions', null, u);
+        if (r.ok && r.data.sessions) {
+          for (const s of r.data.sessions) {
+            await req('DELETE', `/sessions/${s.sessionId || s.id}`, null, u);
+          }
         }
       }
+      await resetScene();
     }
-    await resetScene();
-  }
-</script>
+  </script>
 </body>
+
 </html>

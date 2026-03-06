@@ -1,11 +1,17 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Jira 查询演示 - CC-Portal</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: #0f172a;
@@ -13,7 +19,12 @@
       min-height: 100vh;
       padding: 20px;
     }
-    .container { max-width: 800px; margin: 0 auto; }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
     h1 {
       text-align: center;
       margin-bottom: 8px;
@@ -21,12 +32,14 @@
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
+
     .subtitle {
       text-align: center;
       color: #94a3b8;
       font-size: 0.9rem;
       margin-bottom: 24px;
     }
+
     .panel {
       background: #1e293b;
       border-radius: 12px;
@@ -34,6 +47,7 @@
       margin-bottom: 20px;
       border: 1px solid #334155;
     }
+
     .panel-title {
       font-size: 0.75rem;
       color: #64748b;
@@ -41,6 +55,7 @@
       letter-spacing: 0.05em;
       margin-bottom: 12px;
     }
+
     .row {
       display: flex;
       gap: 12px;
@@ -48,12 +63,17 @@
       flex-wrap: wrap;
       margin-bottom: 12px;
     }
-    .row:last-child { margin-bottom: 0; }
+
+    .row:last-child {
+      margin-bottom: 0;
+    }
+
     label {
       font-size: 0.875rem;
       color: #94a3b8;
       min-width: 70px;
     }
+
     input[type="text"] {
       flex: 1;
       min-width: 180px;
@@ -64,10 +84,12 @@
       color: #e2e8f0;
       font-size: 0.9rem;
     }
+
     input:focus {
       outline: none;
       border-color: #60a5fa;
     }
+
     button {
       padding: 10px 20px;
       border: none;
@@ -76,57 +98,88 @@
       cursor: pointer;
       transition: all 0.2s;
     }
+
     button.primary {
       background: #3b82f6;
       color: white;
     }
-    button.primary:hover:not(:disabled) { background: #2563eb; }
+
+    button.primary:hover:not(:disabled) {
+      background: #2563eb;
+    }
+
     button.secondary {
       background: #475569;
       color: #e2e8f0;
     }
-    button.secondary:hover:not(:disabled) { background: #334155; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    button.secondary:hover:not(:disabled) {
+      background: #334155;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     .chat-container {
       max-height: 420px;
       overflow-y: auto;
     }
+
     .message {
       padding: 14px 16px;
       margin-bottom: 10px;
       border-radius: 10px;
       animation: fadeIn 0.25s ease;
     }
+
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to { opacity: 1; transform: translateY(0); }
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
+
     .message.user {
       background: #1e3a8a;
       margin-left: 15%;
     }
+
     .message.assistant {
       background: #334155;
       border: 1px solid #475569;
       margin-right: 15%;
     }
+
     .message-header {
       font-size: 0.75rem;
       color: #94a3b8;
       margin-bottom: 6px;
     }
+
     .message-content {
       line-height: 1.55;
       white-space: pre-wrap;
       word-break: break-word;
     }
+
     .message-content.streaming {
       border-right: 2px solid #60a5fa;
       animation: blink 1s step-end infinite;
     }
+
     @keyframes blink {
-      50% { border-color: transparent; }
+      50% {
+        border-color: transparent;
+      }
     }
+
     .tool-call {
       background: #0f172a;
       padding: 10px 12px;
@@ -135,27 +188,32 @@
       font-size: 0.8rem;
       border: 1px solid #334155;
     }
+
     .tool-call-header {
       color: #fbbf24;
       font-weight: 600;
       margin-bottom: 4px;
     }
+
     .tool-call-content {
       color: #94a3b8;
       font-family: monospace;
       font-size: 0.75rem;
       overflow-x: auto;
     }
+
     .empty-state {
       text-align: center;
       padding: 48px 24px;
       color: #64748b;
     }
+
     .typing-indicator {
       display: inline-flex;
       gap: 4px;
       padding: 4px 0;
     }
+
     .typing-indicator span {
       width: 6px;
       height: 6px;
@@ -163,18 +221,38 @@
       border-radius: 50%;
       animation: bounce 1.4s infinite ease-in-out both;
     }
-    .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
-    .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
-    @keyframes bounce {
-      0%, 80%, 100% { transform: scale(0); }
-      40% { transform: scale(1); }
+
+    .typing-indicator span:nth-child(1) {
+      animation-delay: -0.32s;
     }
+
+    .typing-indicator span:nth-child(2) {
+      animation-delay: -0.16s;
+    }
+
+    @keyframes bounce {
+
+      0%,
+      80%,
+      100% {
+        transform: scale(0);
+      }
+
+      40% {
+        transform: scale(1);
+      }
+    }
+
     .log {
       margin-top: 12px;
       font-size: 0.75rem;
       color: #64748b;
     }
-    .log.error { color: #f87171; }
+
+    .log.error {
+      color: #f87171;
+    }
+
     .permission-dialog {
       background: #1e3a5f;
       border: 1px solid #3b82f6;
@@ -183,16 +261,19 @@
       margin: 10px 0;
       margin-right: 15%;
     }
+
     .permission-dialog-title {
       font-size: 0.8rem;
       color: #93c5fd;
       margin-bottom: 6px;
     }
+
     .permission-dialog-tool {
       font-weight: 600;
       color: #e2e8f0;
       margin-bottom: 4px;
     }
+
     .permission-dialog-input {
       font-size: 0.75rem;
       color: #94a3b8;
@@ -202,16 +283,19 @@
       max-height: 60px;
       overflow-y: auto;
     }
+
     .permission-dialog-actions {
       display: flex;
       gap: 10px;
     }
+
     .permission-dialog-actions button {
       padding: 8px 16px;
       font-size: 0.875rem;
     }
   </style>
 </head>
+
 <body>
   <div class="container">
     <h1>Jira 查询演示</h1>
@@ -221,7 +305,7 @@
       <div class="panel-title">配置</div>
       <div class="row">
         <label>API</label>
-        <input type="text" id="apiUrl" value="http://localhost:3333" placeholder="http://localhost:3333">
+        <input type="text" id="apiUrl" value="http://localhost:9033" placeholder="http://localhost:9033">
       </div>
       <div class="row">
         <label>用户</label>
@@ -259,7 +343,7 @@
     let currentMessageEl = null;
 
     function getApiUrl() {
-      return document.getElementById('apiUrl').value.trim() || 'http://localhost:3333';
+      return document.getElementById('apiUrl').value.trim() || 'http://localhost:9033';
     }
     function getUserId() {
       return document.getElementById('userId').value.trim() || 'huangqinjia';
@@ -310,10 +394,10 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-          ownerId: userId,
-          permissionMode: 'default',
-          autoAllowToolPatterns: [],
-        }),
+            ownerId: userId,
+            permissionMode: 'default',
+            autoAllowToolPatterns: [],
+          }),
         });
         const data = await res.json();
         if (data.sessionId) {
@@ -339,7 +423,7 @@
         }
         const api = getApiUrl();
         const userId = getUserId();
-        
+
         // Only add user message if we have a message (not reconnecting for approval)
         if (message) {
           addMessage('user', message);
@@ -371,23 +455,23 @@
           }
           try {
             const chunk = JSON.parse(event.data);
-            
+
             // Handle permission_request - stream will close, show dialog then reconnect
             if (chunk.type === 'permission_request') {
               eventSource.close();
-              
+
               const reqId = chunk.requestId;
               const toolName = chunk.toolName || 'tool';
               const toolInput = chunk.toolInput != null ? JSON.stringify(chunk.toolInput) : '';
               const toolInputShort = toolInput.length > 200 ? toolInput.slice(0, 200) + '...' : toolInput;
               const approvalUrl = chunk.approvalUrl || ('/sessions/' + sessionId + '/permissions/' + reqId);
-              
+
               addMessage('assistant', '⏳ 请批准下方工具调用');
-              
+
               const dialog = document.createElement('div');
               dialog.className = 'permission-dialog';
               dialog.innerHTML = '<div class="permission-dialog-title">请求使用工具</div><div class="permission-dialog-tool">' + escapeHtml(toolName) + '</div>' + (toolInputShort ? '<div class="permission-dialog-input">' + escapeHtml(toolInputShort) + '</div>' : '') + '<div class="permission-dialog-actions"><button class="primary" data-allow="1">允许</button><button class="secondary" data-allow="0">拒绝</button></div>';
-              
+
               const doResponse = async (allowed) => {
                 dialog.remove();
                 const permUrl = api + approvalUrl + '?userId=' + encodeURIComponent(userId);
@@ -411,13 +495,13 @@
                   reject(e);
                 }
               };
-              
+
               dialog.querySelector('[data-allow="1"]').addEventListener('click', () => doResponse(true));
               dialog.querySelector('[data-allow="0"]').addEventListener('click', () => doResponse(false));
               document.getElementById('chatContainer').appendChild(dialog);
               return;
             }
-            
+
             if (chunk.type === 'text' && chunk.content) {
               fullContent += chunk.content;
               if (currentMessageEl) {
@@ -430,7 +514,7 @@
             } else if (chunk.type === 'error') {
               log('错误: ' + (chunk.error || 'Unknown'), true);
             }
-          } catch (_) {}
+          } catch (_) { }
         };
 
         eventSource.onerror = () => {
@@ -476,4 +560,5 @@
     });
   </script>
 </body>
+
 </html>

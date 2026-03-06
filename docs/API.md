@@ -2,7 +2,7 @@
 
 ## 基础信息
 
-- **Base URL**: `http://localhost:3333`
+- **Base URL**: `http://localhost:9033`
 - **认证**: 通过 `X-User-ID` header 或 `userId` 查询参数传递用户 ID
 
 ## 会话管理
@@ -10,7 +10,7 @@
 ### `GET /sessions` - 列出所有会话
 
 ```bash
-curl "http://localhost:3333/sessions?userId=user-b"
+curl "http://localhost:9033/sessions?userId=user-b"
 ```
 
 **响应**:
@@ -33,7 +33,7 @@ curl "http://localhost:3333/sessions?userId=user-b"
 ### `POST /sessions` - 创建会话
 
 ```bash
-curl -X POST "http://localhost:3333/sessions?userId=user-b" \
+curl -X POST "http://localhost:9033/sessions?userId=user-b" \
   -H 'Content-Type: application/json' \
   -d '{
     "path": "/path/to/project",
@@ -56,7 +56,7 @@ curl -X POST "http://localhost:3333/sessions?userId=user-b" \
 ### `GET /sessions/:sessionId` - 获取会话信息
 
 ```bash
-curl "http://localhost:3333/sessions/SESSION_ID?userId=user-b"
+curl "http://localhost:9033/sessions/SESSION_ID?userId=user-b"
 ```
 
 **响应**:
@@ -76,7 +76,7 @@ curl "http://localhost:3333/sessions/SESSION_ID?userId=user-b"
 ### `DELETE /sessions/:sessionId` - 删除会话
 
 ```bash
-curl -X DELETE "http://localhost:3333/sessions/SESSION_ID?userId=user-b"
+curl -X DELETE "http://localhost:9033/sessions/SESSION_ID?userId=user-b"
 ```
 
 ---
@@ -88,7 +88,7 @@ curl -X DELETE "http://localhost:3333/sessions/SESSION_ID?userId=user-b"
 **适用场景**: 简单问答，不需要实时流式输出
 
 ```bash
-curl -X POST "http://localhost:3333/sessions/SESSION_ID/messages?userId=user-b" \
+curl -X POST "http://localhost:9033/sessions/SESSION_ID/messages?userId=user-b" \
   -H 'Content-Type: application/json' \
   -d '{"message": "明天深圳天气如何", "from": "user-b"}'
 ```
@@ -116,13 +116,13 @@ curl -X POST "http://localhost:3333/sessions/SESSION_ID/messages?userId=user-b" 
 
 ```bash
 # 获取所有消息
-curl "http://localhost:3333/sessions/SESSION_ID/messages?userId=user-b"
+curl "http://localhost:9033/sessions/SESSION_ID/messages?userId=user-b"
 
 # 获取最近 10 条
-curl "http://localhost:3333/sessions/SESSION_ID/messages?userId=user-b&limit=10"
+curl "http://localhost:9033/sessions/SESSION_ID/messages?userId=user-b&limit=10"
 
 # 获取完整历史（含工具调用）
-curl "http://localhost:3333/sessions/SESSION_ID/messages?userId=user-b&detailed=true"
+curl "http://localhost:9033/sessions/SESSION_ID/messages?userId=user-b&detailed=true"
 ```
 
 **查询参数**:
@@ -152,10 +152,10 @@ curl "http://localhost:3333/sessions/SESSION_ID/messages?userId=user-b&detailed=
 
 ```bash
 # 监听实时响应
-curl -N "http://localhost:3333/sessions/SESSION_ID/stream?message=你好&userId=user-b"
+curl -N "http://localhost:9033/sessions/SESSION_ID/stream?message=你好&userId=user-b"
 
 # 不带 message 参数时，仅监听已有的响应（不发送新消息）
-curl -N "http://localhost:3333/sessions/SESSION_ID/stream?userId=user-b"
+curl -N "http://localhost:9033/sessions/SESSION_ID/stream?userId=user-b"
 ```
 
 **查询参数**:
@@ -191,10 +191,10 @@ data: {"type":"stop","stopReason":"endTurn"}
 
 ```bash
 # 普通查询
-curl "http://localhost:3333/sessions/SESSION_ID/pending-permissions?userId=user-b"
+curl "http://localhost:9033/sessions/SESSION_ID/pending-permissions?userId=user-b"
 
 # SSE 实时监控
-curl -N "http://localhost:3333/sessions/SESSION_ID/pending-permissions?userId=user-b&stream=1"
+curl -N "http://localhost:9033/sessions/SESSION_ID/pending-permissions?userId=user-b&stream=1"
 ```
 
 **响应**:
@@ -216,7 +216,7 @@ curl -N "http://localhost:3333/sessions/SESSION_ID/pending-permissions?userId=us
 ### `POST /sessions/:sessionId/permissions/:requestId` - 审批工具调用
 
 ```bash
-curl -X POST "http://localhost:3333/sessions/SESSION_ID/permissions/req-123?userId=user-b" \
+curl -X POST "http://localhost:9033/sessions/SESSION_ID/permissions/req-123?userId=user-b" \
   -H 'Content-Type: application/json' \
   -d '{"approved": true}'
 ```
@@ -235,27 +235,27 @@ curl -X POST "http://localhost:3333/sessions/SESSION_ID/permissions/req-123?user
 
 ```bash
 # 1. 创建会话
-SESSION_ID=$(curl -X POST "http://localhost:3333/sessions?userId=alice" \
+SESSION_ID=$(curl -X POST "http://localhost:9033/sessions?userId=alice" \
   -H 'Content-Type: application/json' \
   -d '{"path": "/Users/alice/project"}' | jq -r '.id')
 
 # 2. 发送消息（等待响应）
-curl -X POST "http://localhost:3333/sessions/$SESSION_ID/messages?userId=alice" \
+curl -X POST "http://localhost:9033/sessions/$SESSION_ID/messages?userId=alice" \
   -H 'Content-Type: application/json' \
   -d '{"message": "帮我分析项目结构"}'
 
 # 3. 查看历史
-curl "http://localhost:3333/sessions/$SESSION_ID/messages?userId=alice"
+curl "http://localhost:9033/sessions/$SESSION_ID/messages?userId=alice"
 
 # 4. 流式对话
-curl -N "http://localhost:3333/sessions/$SESSION_ID/stream?message=继续分析&userId=alice"
+curl -N "http://localhost:9033/sessions/$SESSION_ID/stream?message=继续分析&userId=alice"
 ```
 
 ### 前端 SSE 示例
 
 ```javascript
 const eventSource = new EventSource(
-  `http://localhost:3333/sessions/${sessionId}/stream?message=${encodeURIComponent(prompt)}`
+  `http://localhost:9033/sessions/${sessionId}/stream?message=${encodeURIComponent(prompt)}`
 );
 
 eventSource.onmessage = (event) => {

@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CC-Portal API Tester</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet">
   <style>
     :root {
       --bg-primary: #0a0a0f;
@@ -51,13 +54,11 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background: repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 2px,
-        rgba(0, 0, 0, 0.1) 2px,
-        rgba(0, 0, 0, 0.1) 4px
-      );
+      background: repeating-linear-gradient(0deg,
+          transparent,
+          transparent 2px,
+          rgba(0, 0, 0, 0.1) 2px,
+          rgba(0, 0, 0, 0.1) 4px);
       pointer-events: none;
       z-index: 9999;
     }
@@ -140,7 +141,9 @@
       font-family: var(--font-mono);
     }
 
-    input, select, textarea {
+    input,
+    select,
+    textarea {
       width: 100%;
       padding: 0.75rem 1rem;
       background: var(--bg-secondary);
@@ -152,7 +155,9 @@
       transition: all 0.2s;
     }
 
-    input:focus, select:focus, textarea:focus {
+    input:focus,
+    select:focus,
+    textarea:focus {
       outline: none;
       border-color: var(--accent-cyan);
       box-shadow: 0 0 0 3px var(--accent-cyan-dim);
@@ -227,10 +232,25 @@
       text-transform: uppercase;
     }
 
-    .method.get { background: var(--accent-green); color: #000; }
-    .method.post { background: var(--accent-cyan); color: #000; }
-    .method.put { background: var(--accent-yellow); color: #000; }
-    .method.delete { background: var(--accent-red); color: #fff; }
+    .method.get {
+      background: var(--accent-green);
+      color: #000;
+    }
+
+    .method.post {
+      background: var(--accent-cyan);
+      color: #000;
+    }
+
+    .method.put {
+      background: var(--accent-yellow);
+      color: #000;
+    }
+
+    .method.delete {
+      background: var(--accent-red);
+      color: #fff;
+    }
 
     .endpoint {
       font-family: var(--font-mono);
@@ -303,8 +323,15 @@
     }
 
     @keyframes slideIn {
-      from { opacity: 0; transform: translateY(-10px); }
-      to { opacity: 1; transform: translateY(0); }
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .response-header {
@@ -322,9 +349,17 @@
       font-weight: 600;
     }
 
-    .status.success { color: var(--accent-green); }
-    .status.error { color: var(--accent-red); }
-    .status.pending { color: var(--accent-yellow); }
+    .status.success {
+      color: var(--accent-green);
+    }
+
+    .status.error {
+      color: var(--accent-red);
+    }
+
+    .status.pending {
+      color: var(--accent-yellow);
+    }
 
     .response-time {
       font-family: var(--font-mono);
@@ -352,12 +387,24 @@
       animation: pulse 2s infinite;
     }
 
-    .status-dot.online { background: var(--accent-green); }
-    .status-dot.offline { background: var(--accent-red); }
+    .status-dot.online {
+      background: var(--accent-green);
+    }
+
+    .status-dot.offline {
+      background: var(--accent-red);
+    }
 
     @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.5;
+      }
     }
 
     /* Footer */
@@ -416,6 +463,7 @@
     }
   </style>
 </head>
+
 <body>
   <div class="container">
     <header>
@@ -429,7 +477,7 @@
       <div class="config-row">
         <div class="input-group">
           <label>Server URL</label>
-          <input type="text" id="serverUrl" value="http://localhost:3333" placeholder="http://localhost:3333">
+          <input type="text" id="serverUrl" value="http://localhost:9033" placeholder="http://localhost:9033">
         </div>
         <div class="input-group">
           <label>Current User ID</label>
@@ -459,7 +507,8 @@
           <span class="endpoint">/sessions</span>
         </div>
         <div class="api-card-body">
-          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Get all sessions for the current user</p>
+          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Get all sessions for the
+            current user</p>
         </div>
         <button class="btn btn-primary" onclick="fetchSessions()">Execute</button>
         <div id="response-sessions" class="response">
@@ -501,7 +550,8 @@
           <span class="endpoint">/sessions/:sessionId</span>
         </div>
         <div class="api-card-body">
-          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Get session metadata (without messages)</p>
+          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Get session metadata (without
+            messages)</p>
           <label>Session ID</label>
           <input type="text" id="get-session-id" placeholder="session-id">
         </div>
@@ -522,7 +572,8 @@
           <span class="endpoint">/sessions/:sessionId/messages</span>
         </div>
         <div class="api-card-body">
-          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Get message history from CLI storage</p>
+          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Get message history from CLI
+            storage</p>
           <label>Session ID</label>
           <input type="text" id="messages-session-id" placeholder="session-id">
           <label style="margin-top: 0.75rem;">Query Params (optional)</label>
@@ -661,7 +712,8 @@
           <span class="endpoint">/my/shared-sessions</span>
         </div>
         <div class="api-card-body">
-          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Get sessions where the user is a participant (not owner)</p>
+          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Get sessions where the user
+            is a participant (not owner)</p>
         </div>
         <button class="btn btn-primary" onclick="getSharedSessions()">Execute</button>
         <div id="response-shared" class="response">
@@ -781,7 +833,7 @@
         });
         const endTime = performance.now();
         const data = await response.json();
-        
+
         return {
           ok: response.ok,
           status: response.status,
@@ -802,7 +854,7 @@
       const el = document.getElementById(responseId);
       const statusEl = el.querySelector('.status');
       const timeEl = el.querySelector('pre');
-      
+
       statusEl.textContent = result.status || 'Error';
       statusEl.className = 'status ' + (result.ok ? 'success' : 'error');
       timeEl.textContent = result.time + 'ms\n\n' + JSON.stringify(result.data, null, 2);
@@ -813,7 +865,7 @@
     function switchTab(tab) {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.api-section').forEach(s => s.classList.remove('active'));
-      
+
       document.querySelector(`.tab[onclick="switchTab('${tab}')"]`).classList.add('active');
       document.getElementById(`section-${tab}`).classList.add('active');
     }
@@ -822,7 +874,7 @@
     async function fetchSessions() {
       const { userId } = getConfig();
       const result = await apiRequest('GET', '/sessions', null, userId);
-      
+
       if (result.ok && result.data.sessions) {
         mySessions = result.data.sessions;
         if (mySessions.length > 0 && !currentSessionId) {
@@ -836,7 +888,7 @@
           document.getElementById('list-part-session').value = currentSessionId;
         }
       }
-      
+
       showResponse('response-sessions', result);
     }
 
@@ -848,9 +900,9 @@
       } catch (e) {
         body = {};
       }
-      
+
       const result = await apiRequest('POST', '/sessions', body, userId);
-      
+
       if (result.ok) {
         mySessions.push({ sessionId: result.data.sessionId, ...body });
         currentSessionId = result.data.sessionId;
@@ -862,7 +914,7 @@
         document.getElementById('add-part-session').value = currentSessionId;
         document.getElementById('list-part-session').value = currentSessionId;
       }
-      
+
       showResponse('response-create-session', result);
     }
 
@@ -891,7 +943,7 @@
       } catch (e) {
         body = { message: 'Hello!' };
       }
-      
+
       const result = await apiRequest('POST', `/sessions/${sessionId}/messages`, body, userId);
       showResponse('response-send-message', result);
     }
@@ -901,7 +953,7 @@
       const sessionId = document.getElementById('stream-session-id').value || currentSessionId;
       const message = document.getElementById('stream-message').value;
       const query = message ? `?message=${encodeURIComponent(message)}` : '';
-      
+
       const result = await apiRequest('GET', `/sessions/${sessionId}/stream${query}`, null, userId);
       showResponse('response-stream', result);
     }
@@ -909,32 +961,32 @@
     async function deleteSession() {
       const { userId } = getConfig();
       const sessionId = document.getElementById('delete-session-id').value || currentSessionId;
-      
+
       const result = await apiRequest('DELETE', `/sessions/${sessionId}`, null, userId);
       showResponse('response-delete', result);
     }
 
     async function createTestSessions() {
       const { userId } = getConfig();
-      
+
       // Create first session
       let result = await apiRequest('POST', '/sessions', { project: 'test-1' }, userId);
       if (!result.ok) {
         alert('Failed to create session: ' + JSON.stringify(result.data));
         return;
       }
-      
+
       const session1 = result.data.sessionId;
-      
+
       // Create second session
       result = await apiRequest('POST', '/sessions', { project: 'test-2' }, userId);
       if (!result.ok) {
         alert('Failed to create second session');
         return;
       }
-      
+
       const session2 = result.data.sessionId;
-      
+
       // Auto-fill
       document.getElementById('get-session-id').value = session1;
       document.getElementById('msg-session-id').value = session1;
@@ -944,10 +996,10 @@
       document.getElementById('add-part-session').value = session1;
       document.getElementById('add-part-user').value = 'another-user';
       document.getElementById('list-part-session').value = session1;
-      
+
       currentSessionId = session1;
       alert(`Created 2 sessions:\n1. ${session1}\n2. ${session2}`);
-      
+
       // Refresh list
       fetchSessions();
     }
@@ -957,7 +1009,7 @@
       const { userId } = getConfig();
       const sessionId = document.getElementById('add-part-session').value || currentSessionId;
       const targetUser = document.getElementById('add-part-user').value;
-      
+
       const result = await apiRequest('POST', `/sessions/${sessionId}/participants`, { userId: targetUser }, userId);
       showResponse('response-add-part', result);
     }
@@ -965,7 +1017,7 @@
     async function listParticipants() {
       const { userId } = getConfig();
       const sessionId = document.getElementById('list-part-session').value || currentSessionId;
-      
+
       const result = await apiRequest('GET', `/sessions/${sessionId}/participants`, null, userId);
       showResponse('response-list-part', result);
     }
@@ -980,7 +1032,7 @@
     async function searchUsers() {
       const { userId } = getConfig();
       const query = document.getElementById('search-query').value;
-      
+
       const result = await apiRequest('GET', `/users?query=${encodeURIComponent(query)}`, null, userId);
       showResponse('response-search', result);
     }
@@ -988,7 +1040,7 @@
     async function getProfile() {
       const { userId } = getConfig();
       const targetUser = document.getElementById('profile-user').value;
-      
+
       const result = await apiRequest('GET', `/users/${targetUser}/profile`, null, userId);
       showResponse('response-profile', result);
     }
@@ -1001,10 +1053,11 @@
       } catch (e) {
         body = {};
       }
-      
+
       const result = await apiRequest('PUT', '/me/profile', body, userId);
       showResponse('response-update-profile', result);
     }
   </script>
 </body>
+
 </html>

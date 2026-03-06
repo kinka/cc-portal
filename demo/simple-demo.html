@@ -1,18 +1,33 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CC-Portal 多租户演示</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: #0f172a;
       color: #e2e8f0;
       min-height: 100vh;
     }
-    .container { width: 100%; height: 100vh; display: flex; flex-direction: column; padding: 12px; overflow: hidden; }
+
+    .container {
+      width: 100%;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      overflow: hidden;
+    }
+
     header {
       text-align: center;
       padding: 8px 0;
@@ -20,6 +35,7 @@
       margin-bottom: 12px;
       flex-shrink: 0;
     }
+
     h1 {
       font-size: 1.4rem;
       background: linear-gradient(135deg, #60a5fa, #a78bfa);
@@ -37,6 +53,7 @@
       border: 1px solid #334155;
       flex-shrink: 0;
     }
+
     .config-row {
       display: flex;
       gap: 12px;
@@ -44,18 +61,25 @@
       align-items: center;
       margin-bottom: 8px;
     }
-    .config-row:last-child { margin-bottom: 0; }
+
+    .config-row:last-child {
+      margin-bottom: 0;
+    }
+
     .config-item {
       display: flex;
       align-items: center;
       gap: 6px;
     }
+
     .config-item label {
       font-size: 0.8rem;
       color: #94a3b8;
       white-space: nowrap;
     }
-    .config-item input, .config-item select {
+
+    .config-item input,
+    .config-item select {
       background: #0f172a;
       border: 1px solid #334155;
       color: #e2e8f0;
@@ -63,11 +87,17 @@
       border-radius: 4px;
       font-size: 0.8rem;
     }
-    .config-item input:focus, .config-item select:focus {
+
+    .config-item input:focus,
+    .config-item select:focus {
       outline: none;
       border-color: #60a5fa;
     }
-    .config-item input[type="text"] { width: 160px; }
+
+    .config-item input[type="text"] {
+      width: 160px;
+    }
+
     .btn {
       padding: 4px 10px;
       border-radius: 4px;
@@ -79,14 +109,42 @@
       align-items: center;
       gap: 4px;
     }
-    .btn-primary { background: #3b82f6; color: white; }
-    .btn-primary:hover { background: #2563eb; }
-    .btn-success { background: #22c55e; color: white; }
-    .btn-success:hover { background: #16a34a; }
-    .btn-danger { background: #ef4444; color: white; }
-    .btn-danger:hover { background: #dc2626; }
-    .btn-secondary { background: #334155; color: #e2e8f0; }
-    .btn-secondary:hover { background: #475569; }
+
+    .btn-primary {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #2563eb;
+    }
+
+    .btn-success {
+      background: #22c55e;
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #16a34a;
+    }
+
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+    }
+
+    .btn-secondary {
+      background: #334155;
+      color: #e2e8f0;
+    }
+
+    .btn-secondary:hover {
+      background: #475569;
+    }
 
     /* 主内容区 */
     .main-layout {
@@ -106,6 +164,7 @@
       height: 100%;
       min-height: 0;
     }
+
     .panel {
       background: #1e293b;
       border-radius: 8px;
@@ -115,6 +174,7 @@
       flex: 1;
       min-height: 0;
     }
+
     .panel-header {
       padding: 8px 12px;
       background: #0f172a;
@@ -126,6 +186,7 @@
       align-items: center;
       flex-shrink: 0;
     }
+
     .panel-content {
       padding: 8px;
       overflow-y: auto;
@@ -142,19 +203,32 @@
       margin-bottom: 8px;
       border: 1px solid transparent;
     }
-    .user-item:hover { background: #334155; }
+
+    .user-item:hover {
+      background: #334155;
+    }
+
     .user-item.active {
       background: rgba(59, 130, 246, 0.2);
       border-color: #3b82f6;
     }
+
     .user-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 2px;
     }
-    .user-name { font-weight: 500; }
-    .user-info { font-size: 0.75rem; color: #94a3b8; }
+
+    .user-name {
+      font-weight: 500;
+    }
+
+    .user-info {
+      font-size: 0.75rem;
+      color: #94a3b8;
+    }
+
     .btn-delete {
       background: transparent;
       border: none;
@@ -165,6 +239,7 @@
       font-size: 0.8rem;
       line-height: 1;
     }
+
     .btn-delete:hover {
       background: rgba(239, 68, 68, 0.2);
       color: #ef4444;
@@ -180,13 +255,27 @@
       border: 1px solid transparent;
       background: #0f172a;
     }
-    .session-item:hover { background: #334155; }
+
+    .session-item:hover {
+      background: #334155;
+    }
+
     .session-item.active {
       background: rgba(34, 197, 94, 0.2);
       border-color: #22c55e;
     }
-    .session-id { font-family: monospace; font-size: 0.8rem; color: #60a5fa; }
-    .session-path { font-size: 0.75rem; color: #94a3b8; margin-top: 4px; }
+
+    .session-id {
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: #60a5fa;
+    }
+
+    .session-path {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
 
     /* 聊天区 */
     .chat-container {
@@ -198,6 +287,7 @@
       height: 100%;
       min-height: 0;
     }
+
     .chat-header {
       padding: 16px;
       border-bottom: 1px solid #334155;
@@ -205,8 +295,17 @@
       justify-content: space-between;
       align-items: center;
     }
-    .chat-title { font-weight: 600; }
-    .chat-subtitle { font-size: 0.8rem; color: #94a3b8; margin-top: 2px; }
+
+    .chat-title {
+      font-weight: 600;
+    }
+
+    .chat-subtitle {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      margin-top: 2px;
+    }
+
     .chat-messages {
       flex: 1;
       overflow-y: auto;
@@ -215,6 +314,7 @@
       flex-direction: column;
       gap: 12px;
     }
+
     .message {
       max-width: 80%;
       padding: 12px 16px;
@@ -222,29 +322,34 @@
       font-size: 0.9rem;
       line-height: 1.5;
     }
+
     .message-user {
       align-self: flex-end;
       background: #3b82f6;
       color: white;
       border-bottom-right-radius: 4px;
     }
+
     .message-assistant {
       align-self: flex-start;
       background: #334155;
       color: #e2e8f0;
       border-bottom-left-radius: 4px;
     }
+
     .message-time {
       font-size: 0.7rem;
       opacity: 0.7;
       margin-top: 4px;
     }
+
     .chat-input-area {
       padding: 16px;
       border-top: 1px solid #334155;
       display: flex;
       gap: 12px;
     }
+
     .chat-input {
       flex: 1;
       background: #0f172a;
@@ -255,8 +360,16 @@
       font-size: 0.9rem;
       resize: none;
     }
-    .chat-input:focus { outline: none; border-color: #60a5fa; }
-    .chat-input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .chat-input:focus {
+      outline: none;
+      border-color: #60a5fa;
+    }
+
+    .chat-input:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
 
     /* 日志区 */
     .log-panel {
@@ -268,6 +381,7 @@
       flex-shrink: 0;
       max-height: 150px;
     }
+
     .log-header {
       padding: 6px 12px;
       background: #0f172a;
@@ -278,6 +392,7 @@
       justify-content: space-between;
       align-items: center;
     }
+
     .log-content {
       max-height: 100px;
       overflow-y: auto;
@@ -285,16 +400,36 @@
       font-family: monospace;
       font-size: 0.75rem;
     }
+
     .log-entry {
       padding: 4px 0;
       border-bottom: 1px solid #334155;
     }
-    .log-entry:last-child { border-bottom: none; }
-    .log-time { color: #64748b; margin-right: 8px; }
-    .log-info { color: #60a5fa; }
-    .log-success { color: #22c55e; }
-    .log-error { color: #ef4444; }
-    .log-warn { color: #f59e0b; }
+
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+
+    .log-time {
+      color: #64748b;
+      margin-right: 8px;
+    }
+
+    .log-info {
+      color: #60a5fa;
+    }
+
+    .log-success {
+      color: #22c55e;
+    }
+
+    .log-error {
+      color: #ef4444;
+    }
+
+    .log-warn {
+      color: #f59e0b;
+    }
 
     /* 空状态 */
     .empty-state {
@@ -302,7 +437,11 @@
       padding: 20px;
       color: #64748b;
     }
-    .empty-state-icon { font-size: 2rem; margin-bottom: 8px; }
+
+    .empty-state-icon {
+      font-size: 2rem;
+      margin-bottom: 8px;
+    }
 
     /* 工具调用显示 */
     .tool-call {
@@ -313,13 +452,44 @@
       border-radius: 0 8px 8px 0;
       font-size: 0.8rem;
     }
-    .tool-call-name { color: #22d3ee; font-weight: 500; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-    .tool-call-name:hover { opacity: 0.8; }
-    .tool-call-name .expand-icon { font-size: 0.7rem; transition: transform 0.2s; }
-    .tool-call-name.collapsed .expand-icon { transform: rotate(-90deg); }
-    .tool-call-input { color: #64748b; margin-top: 4px; word-break: break-all; overflow: hidden; }
-    .tool-call-input.collapsed { max-height: 4.5em; }
-    .tool-call-input.expanded { max-height: none; }
+
+    .tool-call-name {
+      color: #22d3ee;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .tool-call-name:hover {
+      opacity: 0.8;
+    }
+
+    .tool-call-name .expand-icon {
+      font-size: 0.7rem;
+      transition: transform 0.2s;
+    }
+
+    .tool-call-name.collapsed .expand-icon {
+      transform: rotate(-90deg);
+    }
+
+    .tool-call-input {
+      color: #64748b;
+      margin-top: 4px;
+      word-break: break-all;
+      overflow: hidden;
+    }
+
+    .tool-call-input.collapsed {
+      max-height: 4.5em;
+    }
+
+    .tool-call-input.expanded {
+      max-height: none;
+    }
+
     .tool-result {
       background: #1e3a3a;
       border-left: 3px solid #22c55e;
@@ -328,14 +498,25 @@
       border-radius: 0 8px 8px 0;
       font-size: 0.8rem;
     }
-    .tool-result .tool-call-name { color: #22c55e; }
-    .message-tools { font-size: 0.7rem; color: #64748b; margin-top: 4px; }
+
+    .tool-result .tool-call-name {
+      color: #22c55e;
+    }
+
+    .message-tools {
+      font-size: 0.7rem;
+      color: #64748b;
+      margin-top: 4px;
+    }
 
     @media (max-width: 768px) {
-      .main-layout { grid-template-columns: 1fr; }
+      .main-layout {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
+
 <body>
   <div class="container">
     <header>
@@ -347,7 +528,8 @@
       <div class="config-row">
         <div class="config-item">
           <label>API 地址:</label>
-          <input type="text" id="apiUrl" value="http://localhost:3333" placeholder="http://localhost:3333">
+          <input type="text" id="apiUrl" value="http://localhost:9033" placeholder="http://localhost:9033"
+            onchange="refreshAll()">
         </div>
         <div class="config-item">
           <label>当前用户:</label>
@@ -363,7 +545,8 @@
         </div>
         <button class="btn btn-primary" onclick="switchUser()">👤 切换用户</button>
         <button class="btn btn-danger" onclick="deleteCurrentSession()">🗑️ 删除当前 Session</button>
-        <button class="btn btn-danger" onclick="clearAllSessions()" title="清空当前用户的所有 Sessions">🗑️🗑️ 清空所有 Sessions</button>
+        <button class="btn btn-danger" onclick="clearAllSessions()" title="清空当前用户的所有 Sessions">🗑️🗑️ 清空所有
+          Sessions</button>
       </div>
     </div>
 
@@ -375,7 +558,8 @@
         <div class="panel">
           <div class="panel-header">
             <span>👥 所有用户</span>
-            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="loadUsers()">刷新</button>
+            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;"
+              onclick="loadUsers()">刷新</button>
           </div>
           <div class="panel-content" id="userList">
             <div class="empty-state">
@@ -426,7 +610,8 @@
     <div class="log-panel">
       <div class="log-header">
         <span>📝 系统日志</span>
-        <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="clearLogs()">清空</button>
+        <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;"
+          onclick="clearLogs()">清空</button>
       </div>
       <div class="log-content" id="logContent">
         <div class="log-entry"><span class="log-time">--:--:--</span>等待开始...</div>
@@ -438,7 +623,7 @@
     // Parse URL parameters for user
     const urlParams = new URLSearchParams(window.location.search);
     const urlUser = urlParams.get('user');
-    
+
     let currentUserId = urlUser || 'demo-user';
     let currentSessionId = null;
     let currentSessions = [];
@@ -449,20 +634,20 @@
     if (urlUser) {
       document.getElementById('currentUser').value = urlUser;
     }
-    
+
     // 更新 URL 参数（不刷新页面）
     function updateUrlUser(userId) {
       const url = new URL(window.location);
       url.searchParams.set('user', userId);
       window.history.replaceState({}, '', url);
     }
-    
+
     // 初始化时更新 URL
     updateUrlUser(currentUserId);
 
 
     function getApiUrl() {
-      return document.getElementById('apiUrl').value || 'http://localhost:3333';
+      return document.getElementById('apiUrl').value || 'http://localhost:9033';
     }
 
     function log(message, type = 'info') {
@@ -531,7 +716,7 @@
         log('不能删除当前用户，请先切换到其他用户', 'error');
         return;
       }
-      
+
       try {
         log(`删除用户: ${userId}...`, 'warn');
         const res = await fetch(`${getApiUrl()}/admin/users/${userId}?userId=${currentUserId}`, {
@@ -632,7 +817,7 @@
         container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">💬</div><div>开始对话吧</div></div>';
         return;
       }
-      
+
       // 过滤掉空消息
       const html = messageHistory.map(m => renderMessageItem(m)).filter(h => h).join('');
       if (!html) {
@@ -648,7 +833,7 @@
       if (m.type === 'system' || m.type === 'result' || m.type === 'queue-operation') {
         return '';
       }
-      
+
       // 工具调用 (type: 'tool_use')
       if (m.type === 'tool_use' || (m.type === 'assistant' && m.tool_name)) {
         const inputStr = m.tool_input ? JSON.stringify(m.tool_input, null, 2) : '';
@@ -664,7 +849,7 @@
           </div>
         `;
       }
-      
+
       // 工具结果 (type: 'tool_result')
       if (m.type === 'tool_result' && m.tool_output !== undefined) {
         const outputStr = typeof m.tool_output === 'string' ? m.tool_output : JSON.stringify(m.tool_output, null, 2);
@@ -681,11 +866,11 @@
           </div>
         `;
       }
-      
+
       // 用户消息 (type: 'user')
       if (m.type === 'user' && m.message?.content) {
         const contentArray = Array.isArray(m.message.content) ? m.message.content : null;
-        
+
         // 检查是否是 tool_result
         if (contentArray) {
           const toolResult = contentArray.find(c => c.type === 'tool_result');
@@ -711,10 +896,10 @@
             `;
           }
         }
-        
+
         // 普通用户消息
-        const content = typeof m.message.content === 'string' 
-          ? m.message.content 
+        const content = typeof m.message.content === 'string'
+          ? m.message.content
           : contentArray.map(c => c.text || '').join('');
         return `
           <div class="message message-user">
@@ -723,11 +908,11 @@
           </div>
         `;
       }
-      
+
       // 助手消息 (type: 'assistant') - 可能包含 thinking, text 和 tool_use
       if (m.type === 'assistant' && m.message?.content) {
         const contentArray = Array.isArray(m.message.content) ? m.message.content : [{ type: 'text', text: m.message.content }];
-        
+
         // 处理 content 数组中的多个部分
         const parts = contentArray.map(c => {
           // thinking 类型
@@ -765,10 +950,10 @@
           }
           return '';
         }).join('');
-        
+
         // 如果没有内容，跳过
         if (!parts.trim()) return '';
-        
+
         return `
           <div class="message message-assistant">
             ${parts}
@@ -776,7 +961,7 @@
           </div>
         `;
       }
-      
+
       // 兼容简单格式 { role, content, timestamp }
       if (m.role && m.content) {
         return `
@@ -786,7 +971,7 @@
           </div>
         `;
       }
-      
+
       // 未知格式，跳过
       return '';
     }
@@ -800,7 +985,7 @@
     function toggleToolCollapse(headerEl) {
       const inputEl = headerEl.nextElementSibling;
       if (!inputEl) return;
-      
+
       if (headerEl.classList.contains('collapsed')) {
         headerEl.classList.remove('collapsed');
         inputEl.classList.remove('collapsed');
@@ -1032,9 +1217,9 @@
         alert('请先设置用户ID');
         return;
       }
-      
+
       log(`开始清空用户 ${currentUserId} 的所有 Sessions...`, 'warn');
-      
+
       try {
         // 关闭当前 EventSource
         if (currentSessionId) {
@@ -1042,21 +1227,21 @@
           messageHistory = [];
           updateChatUI();
         }
-        
+
         // 获取当前用户的所有 Sessions
         const res = await fetch(`${getApiUrl()}/sessions?userId=${currentUserId}`);
         if (!res.ok) throw new Error('获取 Sessions 失败');
-        
+
         const data = await res.json();
         const sessions = data.sessions || [];
-        
+
         if (sessions.length === 0) {
           log('该用户没有 Sessions', 'info');
           return;
         }
-        
+
         log(`找到 ${sessions.length} 个 Sessions，开始删除...`, 'info');
-        
+
         // 逐个删除
         let successCount = 0;
         let failCount = 0;
@@ -1077,7 +1262,7 @@
             log(`删除异常: ${session.sessionId.slice(0, 16)}... - ${e.message}`, 'error');
           }
         }
-        
+
         log(`清空完成: 成功 ${successCount} 个, 失败 ${failCount} 个`, successCount > 0 ? 'success' : 'error');
         loadSessions();
       } catch (e) {
@@ -1100,4 +1285,5 @@
     };
   </script>
 </body>
+
 </html>

@@ -42,7 +42,7 @@ describe('ClaudeSession.buildPrompt', () => {
 
   test('multi-user: injects session context header', () => {
     const ctx = {
-      apiBaseUrl: 'http://localhost:3333',
+      apiBaseUrl: 'http://localhost:9033',
       userId: 'alice',
       sessionId: 'sid-123',
       ownerId: 'alice',
@@ -50,7 +50,7 @@ describe('ClaudeSession.buildPrompt', () => {
     };
     const result = ClaudeSession.buildPrompt('hello', 'bob', ctx);
     expect(result).toContain('[Session Context]');
-    expect(result).toContain('CC-Portal API: http://localhost:3333');
+    expect(result).toContain('CC-Portal API: http://localhost:9033');
     expect(result).toContain('Auth header: X-User-ID: alice');
     expect(result).toContain('Your session ID: sid-123');
     expect(result).toContain('Participants: alice, bob');
@@ -60,7 +60,7 @@ describe('ClaudeSession.buildPrompt', () => {
 
   test('single-user: no context header even if context provided', () => {
     const ctx = {
-      apiBaseUrl: 'http://localhost:3333',
+      apiBaseUrl: 'http://localhost:9033',
       userId: 'alice',
       sessionId: 'sid-123',
       ownerId: 'alice',
@@ -228,7 +228,7 @@ describe('API (no claude)', () => {
       await Promise.race([
         streamRes.text(),
         new Promise<void>((_, rej) => setTimeout(() => rej(new Error('stream read timeout')), 3000)),
-      ]).catch(() => {});
+      ]).catch(() => { });
     } finally {
       await app.close();
     }
@@ -446,7 +446,7 @@ describe('E2E (real claude)', () => {
       };
       const messages = histBody.messages || [];
       const aliceMsg = messages.find(m => m.from === owner && m.role === 'user');
-      const bobMsg   = messages.find(m => m.from === participant && m.role === 'user');
+      const bobMsg = messages.find(m => m.from === participant && m.role === 'user');
 
       // Stored content should be original (without prefix)
       expect(aliceMsg?.content).not.toContain('[alice-multiuser]:');
