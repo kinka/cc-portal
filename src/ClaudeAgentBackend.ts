@@ -498,6 +498,7 @@ export class ClaudeAgentBackend extends EventEmitter {
       '--input-format',
       'stream-json',
       '--verbose',
+      '--include-partial-messages',
     ];
     if (useSrt) {
       const settingsPath = join(import.meta.dirname, 'srt-settings.json');
@@ -700,12 +701,22 @@ export class ClaudeAgentBackend extends EventEmitter {
             level: logMsg.log.level,
             message: logMsg.log.message,
           };
+        } else if (msg.type === 'stream_event') {
+          // Granular streaming events from --include-partial-messages
+          const streamMsg = msg as unknown as { type: 'stream_event'; event: { type: string; delta?: { type: string; text?: string } } };
+          if (
+            streamMsg.event.type === 'content_block_delta' &&
+            streamMsg.event.delta?.type === 'text_delta' &&
+            streamMsg.event.delta.text
+          ) {
+            yield { type: 'text', content: streamMsg.event.delta.text };
+          }
         } else if (msg.type === 'assistant') {
+          // Final assistant message: text already streamed via stream_event deltas.
+          // Only emit tool_use and tool_result blocks.
           const assistantMsg = msg as SDKAssistantMessage;
           for (const content of assistantMsg.message.content) {
-            if (content.type === 'text' && content.text) {
-              yield { type: 'text', content: content.text };
-            } else if (content.type === 'tool_use' && content.name) {
+            if (content.type === 'tool_use' && content.name) {
               yield {
                 type: 'tool_start',
                 toolName: content.name,

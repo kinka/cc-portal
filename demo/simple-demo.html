@@ -1176,12 +1176,14 @@
       document.getElementById('messageInput').classList.add('disabled');
 
       // 构建助手消息结构（用于流式更新）
+      const streamId = `stream_${Date.now()}`;
       const assistantMsg = {
         type: 'assistant',
         message: {
           content: []  // 内容数组，包含 text, thinking, tool_use
         },
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        _streamId: streamId  // 用于定位流式 DOM 节点
       };
       messageHistory.push(assistantMsg);
 
@@ -1190,11 +1192,28 @@
       let currentThinkingBlock = null;
       let currentToolUse = null;
 
-      // 辅助函数：确保文本块存在
+      // 辅助函数：确保文本块存在，并在 DOM 中创建对应节点
       function ensureTextBlock() {
         if (!currentTextBlock) {
           currentTextBlock = { type: 'text', text: '' };
           assistantMsg.message.content.push(currentTextBlock);
+
+          // 在 DOM 里直接创建（或找到）助手消息容器，追加一个 span
+          let msgDiv = document.getElementById(streamId);
+          if (!msgDiv) {
+            // 首次创建整个助手消息气泡
+            const container = document.getElementById('chatMessages');
+            msgDiv = document.createElement('div');
+            msgDiv.id = streamId;
+            msgDiv.className = 'message message-assistant';
+            container.appendChild(msgDiv);
+            scrollChatToBottomIfNeeded();
+          }
+          // 创建文本 span 节点
+          const span = document.createElement('span');
+          span.dataset.textBlock = 'true';
+          msgDiv.appendChild(span);
+          currentTextBlock._domSpan = span;
         }
         return currentTextBlock;
       }
@@ -1202,8 +1221,17 @@
       // 辅助函数：完成当前工具调用
       function finishCurrentTool() {
         if (currentToolUse) {
-          assistantMsg.message.content.push(currentToolUse);
           currentToolUse = null;
+        }
+      }
+
+      // 只在用户已经滚动到底部时才自动滚动
+      function scrollChatToBottomIfNeeded() {
+        const container = document.getElementById('chatMessages');
+        const threshold = 80; // px
+        const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+        if (isAtBottom) {
+          container.scrollTop = container.scrollHeight;
         }
       }
 
@@ -1221,6 +1249,9 @@
             document.getElementById('sendBtn').classList.remove('disabled');
             document.getElementById('messageInput').classList.remove('disabled');
             document.getElementById('messageInput').focus();
+            // 去掉流式标记 ID，避免和后续渲染冲突
+            const streamDiv = document.getElementById(streamId);
+            if (streamDiv) streamDiv.removeAttribute('id');
             log('响应完成', 'success');
             return;
           }
@@ -1230,26 +1261,31 @@
 
             // 处理不同类型的 chunk
             if (chunk.type === 'text' && chunk.content) {
-              // 文本内容
+              // ⚡ 直接追加文本到 DOM，不触发全量 renderMessages()
               finishCurrentTool();
-              ensureTextBlock().text += chunk.content;
-              renderMessages();
+              const block = ensureTextBlock();
+              block.text += chunk.content;
+              // 直接操作 span.textContent（安全且高效）
+              if (block._domSpan) {
+                block._domSpan.textContent = block.text;
+                scrollChatToBottomIfNeeded();
+              }
             }
             else if (chunk.type === 'thinking' && chunk.content) {
-              // 思考过程
+              // 思考过程（较少见，用全量渲染）
               finishCurrentTool();
               if (!currentThinkingBlock) {
                 currentThinkingBlock = { type: 'thinking', thinking: '' };
                 assistantMsg.message.content.push(currentThinkingBlock);
               }
               currentThinkingBlock.thinking += chunk.content;
+              // 思考块不频繁，用全量渲染
               renderMessages();
             } else if (chunk.type === 'tool_start') {
-              // 工具调用开始
+              // 工具调用开始：重置文本块，用全量渲染展示工具卡片
               finishCurrentTool();
               currentTextBlock = null;
               currentThinkingBlock = null;
-              // 创建并立即添加到内容中
               currentToolUse = {
                 type: 'tool_use',
                 id: chunk.toolUseId || `tool_${Date.now()}`,
@@ -1258,14 +1294,19 @@
               };
               assistantMsg.message.content.push(currentToolUse);
               log(`🔧 工具调用: ${chunk.toolName}`, 'warn');
+              // 工具调用是结构变化，用全量渲染
+              const streamDiv = document.getElementById(streamId);
+              if (streamDiv) streamDiv.removeAttribute('id');
               renderMessages();
+              // 重新关联 ID（renderMessages 会重建 DOM）
+              const newDiv = document.querySelector(`.message-assistant:last-of-type`);
+              if (newDiv) newDiv.id = streamId;
             }
             else if (chunk.type === 'tool_end') {
-              // 工具调用结束
               currentToolUse = null;
             }
             else if (chunk.type === 'tool_output') {
-              // 工具输出 - 作为独立的 tool_result 消息
+              // 工具输出
               finishCurrentTool();
               messageHistory.push({
                 type: 'tool_result',
@@ -1295,6 +1336,7 @@
         document.getElementById('messageInput').classList.remove('disabled');
       }
     }
+
 
     // 删除当前 session
     async function deleteCurrentSession() {
