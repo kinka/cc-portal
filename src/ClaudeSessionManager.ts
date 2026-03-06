@@ -14,6 +14,8 @@ const usersClaudeMdTemplate = join(__dirname, 'users-CLAUDE.md');
 
 export interface CreateSessionOptions {
   ownerId: string;
+  /** Optional caller-supplied session UUID. If omitted, one is generated server-side. Must be a valid UUID v4. */
+  sessionId?: string;
   path?: string;
   /** Project name to associate with this session */
   project?: string;
@@ -187,7 +189,7 @@ export class ClaudeSessionManager {
       }
     }
 
-    const sessionId = randomUUID();
+    const sessionId = options.sessionId ?? randomUUID();
     const resolvedPath = await this.resolveUserPath(ownerId, options.path);
 
     // Read user's MCP config and merge with session options (pass inline to skip trust prompt)

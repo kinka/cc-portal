@@ -135,6 +135,8 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
     const userContext = requireUserContext(request);
 
     const body = request.body as {
+      /** Optional caller-supplied session UUID (must be valid UUID v4); server generates one if omitted. */
+      sessionId?: string;
       ownerId?: string;
       path?: string;
       project?: string;
@@ -171,8 +173,18 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
         };
       }
 
+      // Validate caller-provided sessionId if present
+      if (body.sessionId !== undefined) {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (typeof body.sessionId !== 'string' || !uuidRegex.test(body.sessionId)) {
+          reply.status(400);
+          return { error: 'Invalid sessionId', message: 'sessionId must be a valid UUID v4' };
+        }
+      }
+
       const session = await manager.createSession({
         ownerId,
+        sessionId: body.sessionId,
         path: body.path,
         project: body.project,
         initialMessage: body.initialMessage,
