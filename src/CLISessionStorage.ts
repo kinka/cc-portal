@@ -317,6 +317,49 @@ export class CLISessionStorage {
     }
     return false;
   }
+  /**
+   * Evict the oldest N sessions for a user, sorted by lastModified (ascending).
+   * Deletes .jsonl files from disk, clears in-memory caches and participant config.
+   * Returns the list of evicted session IDs.
+   */
+  async evictStaleSessions(userId: string, count: number): Promise<string[]> {
+    if (count <= 0) return [];
+    await this.initialize();
+
+    const userDir = this.userWorkDir(userId);
+    const projectDir = this.userProjectDir(userId);
+    const sessions = await this.listSessionsInDir(projectDir, userDir);
+
+    // Sort by lastModified ascending (oldest first)
+    sessions.sort((a, b) => a.lastModified.getTime() - b.lastModified.getTime());
+
+    const toEvict = sessions.slice(0, count);
+    const evictedIds: string[] = [];
+
+    for (const session of toEvict) {
+      const sessionFile = join(projectDir, `${session.id}.jsonl`);
+      try {
+        await unlink(sessionFile);
+        evictedIds.push(session.id);
+        // Clean up caches
+        this.newSessionsCache.delete(session.id);
+        // Clean up participant config
+        delete this.config.participants[session.id];
+        log.info({ sessionId: session.id, userId, lastModified: session.lastModified }, 'Evicted stale session');
+      } catch (err) {
+        log.warn({ err, sessionId: session.id }, 'Failed to evict session file');
+      }
+    }
+
+    if (evictedIds.length > 0) {
+      this.invalidateDiscoverCache();
+      await this.saveConfig();
+    }
+
+    log.info({ userId, requested: count, evicted: evictedIds.length }, 'Stale session eviction complete');
+    return evictedIds;
+  }
+
   // ============ User Methods (no storage needed) ============
 
   /**
@@ -363,15 +406,15 @@ export class CLISessionStorage {
    */
   async listUsers(): Promise<Array<{ id: string; maxSessions: number; createdAt: string }>> {
     await this.initialize();
-    
+
     const users: Array<{ id: string; maxSessions: number; createdAt: string }> = [];
-    
+
     try {
       const entries = await readdir(this.usersDir, { withFileTypes: true });
-      
+
       for (const entry of entries) {
         if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
-        
+
         users.push({
           id: entry.name,
           maxSessions: DEFAULT_MAX_SESSIONS,
@@ -381,7 +424,7 @@ export class CLISessionStorage {
     } catch (err) {
       log.warn({ err }, 'Failed to read users directory');
     }
-    
+
     return users;
   }
 
@@ -446,11 +489,11 @@ export class CLISessionStorage {
    */
   async addParticipant(sessionId: string, userId: string): Promise<boolean> {
     await this.initialize();
-    
+
     if (!this.config.participants[sessionId]) {
       this.config.participants[sessionId] = { participants: [] };
     }
-    
+
     const existing = this.config.participants[sessionId].participants.find(p => p.userId === userId);
     if (existing) {
       existing.status = 'joined';
@@ -462,7 +505,7 @@ export class CLISessionStorage {
         joinedAt: new Date().toISOString(),
       });
     }
-    
+
     await this.saveConfig();
     return true;
   }
@@ -493,15 +536,15 @@ export class CLISessionStorage {
    */
   async getUserParticipatingSessions(userId: string): Promise<string[]> {
     await this.initialize();
-    
+
     const sessionIds: string[] = [];
-    
+
     for (const [sessionId, data] of Object.entries(this.config.participants)) {
       if (data.participants.some(p => p.userId === userId && p.status === 'joined')) {
         sessionIds.push(sessionId);
       }
     }
-    
+
     return sessionIds;
   }
 }

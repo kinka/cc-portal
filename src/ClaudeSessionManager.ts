@@ -166,7 +166,25 @@ export class ClaudeSessionManager {
     const maxSessions = user.maxSessions;
 
     if (userSessionCount >= maxSessions) {
-      throw new Error(`Session quota exceeded. Max ${maxSessions} sessions allowed.`);
+      // Auto-evict oldest sessions to make room
+      const evictCount = userSessionCount - maxSessions + 1;
+      log.info({ ownerId, userSessionCount, maxSessions, evictCount }, 'Session quota reached, evicting stale sessions');
+      const evictedIds = await this.storage.evictStaleSessions(ownerId, evictCount);
+
+      // Destroy in-memory session instances for evicted sessions
+      for (const evictedId of evictedIds) {
+        const entry = this.sessions.get(evictedId);
+        if (entry?.session && entry.session instanceof ClaudeSession) {
+          entry.session.destroy();
+        }
+        this.sessions.delete(evictedId);
+      }
+
+      // Defensive check: verify quota is now available
+      const newCount = await this.storage.getUserSessionCount(ownerId);
+      if (newCount >= maxSessions) {
+        throw new Error(`Session quota exceeded. Max ${maxSessions} sessions allowed. Auto-cleanup failed to free enough space.`);
+      }
     }
 
     const sessionId = randomUUID();
@@ -260,7 +278,7 @@ export class ClaudeSessionManager {
       ownerId: ownerId || 'unknown',
       path: '', // Will be determined from CLI storage
     });
-    
+
     this.sessionLoadingLocks.set(sessionId, loadPromise);
     loadPromise.finally(() => this.sessionLoadingLocks.delete(sessionId));
 
@@ -304,7 +322,7 @@ export class ClaudeSessionManager {
 
   async listSessions(userId: string): Promise<SessionInfo[]> {
     const userSessions = await this.storage.listUserSessions(userId);
-    
+
     return userSessions.map(s => ({
       id: s.id,
       path: s.path || '',
