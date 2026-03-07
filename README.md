@@ -6,17 +6,61 @@
 
 ## 功能特性
 
+### 核心功能
+
 - 🚀 直接调用 Claude Code CLI，进程复用优化
 - 💬 持续对话支持，多轮对话复用同一进程
 - 📡 SSE 流式消息推送（含 system/log/tool 等 chunk 类型）
+- 📝 会话管理和历史记录持久化（存储在 Claude CLI 的 `~/.claude/projects/`）
 - 🔄 进程复用机制，避免重复启动开销
+
+### 会话管理
+
+- 支持自定义 Session ID（UUID v4）
+- 会话配额管理（默认每用户最多 200 个会话）
+- 自动清理最旧的会话
+- 支持恢复已有会话
+- 实时文本流（partial messages）
+
+### 权限控制
+
 - 🛠️ 支持自定义模型、allowedTools/disallowedTools、MCP、maxTurns
-- 🔐 权限模式对齐 happy-cli：permissionMode（default/acceptEdits/bypassPermissions/plan）、程序化 canCallTool
+- 🔐 权限模式：`default` | `acceptEdits` | `bypassPermissions` | `plan`
 - 🔐 **HTTP 工具审批**：支持 HTTP/REST 审批流程（SSE 实时推送、pending-permissions 队列）
-- 📝 会话管理和历史记录
-- 🎯 完善的生命周期管理
+- ⚡ **自动允许只读工具**：Read、Glob、Grep 等无需审批
+
+**权限模式说明：**
+
+| 模式 | 说明 |
+|------|------|
+| `bypassPermissions` | 自动允许所有工具调用（默认） |
+| `default` | 需要审批危险操作，自动允许只读工具 |
+| `acceptEdits` | 自动允许编辑操作 |
+| `plan` | 规划模式 |
+
+**自动允许的工具（无需审批）：**
+
+- 只读工具：`Read`, `Glob`, `Grep`, `LS`, `TodoRead`, `WebFetch`, `WebSearch`
+- MCP 只读模式：`mcp__*__*get*`, `mcp__*__*list*`, `mcp__*__*search*`, `mcp__*__*fetch*`, `mcp__*__*read*`, `mcp__*__*find*`
+
+### 多用户协作
+
 - 👥 **多用户 Session**：支持 Owner + Participants 共享会话
 - 👤 **用户目录**：用户 Profile 管理与搜索
+- 🔒 **用户隔离**：基于 X-User-ID 的会话隔离
+- 🤝 **会话共享**：邀请其他用户参与会话
+
+### MCP 集成
+
+- 📦 用户级 MCP 服务器配置
+- 🔧 动态加载 MCP 服务器
+- 🔗 支持 inline MCP 配置（跳过信任提示）
+
+### 管理功能
+
+- 📊 管理员 API（用户管理、会话统计）
+- 📈 服务监控（健康检查、统计信息）
+- ⚙️ 配额管理
 
 ## 架构
 
@@ -95,14 +139,18 @@ GET /health
 ```bash
 POST /sessions
 Content-Type: application/json
+X-User-ID: your-user-id
 
 {
+  "sessionId": "可选的 UUID v4，不传则自动生成",
   "path": "/path/to/project",
+  "project": "项目名称（可选）",
   "initialMessage": "可选的初始消息",
-  "model": "claude-sonnet-4.5",
+  "model": "claude-sonnet-4-6",
   "allowedTools": ["Read", "Edit", "Bash"],
   "disallowedTools": [],
-  "permissionMode": "bypassPermissions",
+  "permissionMode": "default",
+  "permissionTimeoutMs": 300000,
   "maxTurns": 100,
   "envVars": { "CUSTOM_VAR": "value" },
   "mcpServers": {
@@ -111,37 +159,99 @@ Content-Type: application/json
       "args": ["/path/to/server.js"],
       "env": { "KEY": "value" }
     }
-  }
+  },
+  "autoAllowToolPatterns": ["mcp__my__*"]
 }
 ```
 
-- `permissionMode`: `default` | `acceptEdits` | `bypassPermissions` | `plan`，默认不传时为放行。
+- `permissionMode`: `default` | `acceptEdits` | `bypassPermissions` | `plan`，默认 `bypassPermissions`。
 - `permissionTimeoutMs`: HTTP 工具审批超时时间（毫秒），默认 300000（5 分钟）。
+- `autoAllowToolPatterns`: 额外的自动允许工具模式（如 `["mcp__my__*"]`），与预设的只读工具合并。
+- `sessionId`: 可选的 UUID v4，用于幂等创建或恢复会话。
 
 #### 列出所有会话
 ```bash
 GET /sessions
+X-User-ID: your-user-id
+
+# 返回
+{
+  "sessions": [
+    { "sessionId": "xxx", "path": "/path", "createdAt": "..." }
+  ],
+  "quota": { "max": 200, "used": 1 }
+}
 ```
 
 #### 获取会话详情
 ```bash
 GET /sessions/:sessionId
+X-User-ID: your-user-id
+```
+
+#### 获取消息历史
+```bash
+GET /sessions/:sessionId/messages
+GET /sessions/:sessionId/messages?detailed=1&limit=10
+X-User-ID: your-user-id
+
+# 返回
+{
+  "sessionId": "xxx",
+  "source": "cli",
+  "detailed": false,
+  "count": 5,
+  "messages": [
+    { "role": "user", "content": "Hello", "timestamp": "..." },
+    { "role": "assistant", "content": "Hi!", "timestamp": "..." }
+  ]
+}
 ```
 
 #### 发送消息
 ```bash
 POST /sessions/:sessionId/messages
 Content-Type: application/json
+X-User-ID: your-user-id
 
 {
   "message": "你的消息",
   "from": "user-id"  // 可选，标识消息发送者（多用户场景）
+}
+
+# 返回
+{
+  "sessionId": "xxx",
+  "response": "Claude 的回复",
+  "timestamp": "..."
 }
 ```
 
 #### 流式接收消息 (SSE)
 ```bash
 GET /sessions/:sessionId/stream?message=你的消息
+X-User-ID: your-user-id
+
+# SSE 响应格式：
+# data: {"type":"text","content":"Hello"}
+# data: {"type":"tool_start","toolName":"Read","toolUseId":"xxx","toolInput":{}}
+# data: {"type":"tool_output","toolOutput":{},"toolUseId":"xxx"}
+# data: {"type":"permission_request","requestId":"xxx","toolName":"Write","toolInput":{}}
+# data: [DONE]
+```
+
+**无消息参数时**：仅监听当前响应（用于权限审批后继续）：
+```bash
+GET /sessions/:sessionId/stream
+X-User-ID: your-user-id
+```
+
+#### 停止会话
+```bash
+POST /sessions/:sessionId/stop
+X-User-ID: your-user-id
+
+# 返回 { "sessionId": "xxx", "status": "stopped" }
 ```
 
 #### 工具审批（permissionMode 非 bypass 时）
@@ -173,9 +283,97 @@ Content-Type: application/json
 
 可选 `permissionTimeoutMs`（默认 300000）控制等待审批超时。
 
+#### MCP 配置
+
+```bash
+# 获取用户 MCP 配置
+GET /mcp
+X-User-ID: your-user-id
+
+# 返回
+{ "mcpServers": { "my-server": { "command": "...", "args": [], "env": {} } } }
+
+# 更新用户 MCP 配置
+PUT /mcp
+X-User-ID: your-user-id
+Content-Type: application/json
+
+{
+  "mcpServers": {
+    "my-server": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server"],
+      "env": { "API_KEY": "xxx" }
+    }
+  }
+}
+
+# 返回 { "success": true }
+```
+
+> **注意**：更新 MCP 配置后，该用户的所有活跃会话会被自动关闭，新会话将使用新配置。
+
 #### 删除会话
 ```bash
 DELETE /sessions/:sessionId
+X-User-ID: your-user-id
+
+# 返回 { "sessionId": "xxx", "status": "deleted" }
+```
+
+### 管理员 API
+
+管理端点需要 `X-Admin-Token` 认证：
+
+```bash
+X-Admin-Token: your-admin-token  # 默认为 "change-me-in-production"
+```
+
+#### 列出所有用户
+```bash
+GET /admin/users
+X-Admin-Token: your-admin-token
+
+# 返回
+{
+  "users": [
+    { "userId": "alice", "maxSessions": 200, "used": 5 }
+  ]
+}
+```
+
+#### 列出所有会话
+```bash
+GET /admin/sessions
+X-Admin-Token: your-admin-token
+
+# 返回
+{
+  "sessions": [
+    {
+      "sessionId": "xxx",
+      "ownerId": "alice",
+      "projectPath": "/Users/alice/project",
+      "lastModified": "...",
+      "createdAt": "..."
+    }
+  ]
+}
+```
+
+#### 服务统计
+```bash
+GET /admin/stats
+X-Admin-Token: your-admin-token
+
+# 返回
+{
+  "users": { "total": 10 },
+  "sessions": {
+    "total": 25,
+    "byProject": { "/path/to/project": 5 }
+  }
+}
 ```
 
 ### 用户管理 API
@@ -407,7 +605,35 @@ Current speaker: alice
 |------|--------|------|
 | `PORT` | `9033` | 服务端口 |
 | `HOST` | `0.0.0.0` | 服务主机 |
-| `DEBUG` | - | 启用调试日志 |
+| `USERS_DIR` | `./users` | 用户数据目录 |
+| `ADMIN_TOKEN` | `change-me-in-production` | 管理员令牌 |
+| `DEFAULT_MAX_SESSIONS` | `200` | 每用户最大会话数 |
+| `CC_AGENTS_URL` | `http://localhost:9033` | Agent API 基础 URL |
+| `LOG_LEVEL` | `info` | 日志级别 |
+
+## 数据存储
+
+### 会话数据
+
+会话数据存储在 Claude CLI 的本地存储中：
+
+```
+~/.claude/projects/{project-hash}/{session-id}.jsonl
+```
+
+### 用户数据
+
+用户相关数据存储在 `USERS_DIR` 目录下：
+
+```
+{USERS_DIR}/
+├── {user-id}/                  # 用户目录（作为 Claude 工作目录）
+│   ├── .git/                   # Git 目录（用于 auto memory）
+│   ├── mcp-config.json         # 用户 MCP 配置
+│   └── profile.json            # 用户 Profile
+├── portal-config.json          # 参与者映射等元数据
+└── CLAUDE.md                   # 共享的 Claude 指令
+```
 
 ## 测试
 
@@ -463,16 +689,44 @@ cc-portal/
 1. 需要预先安装 Claude Code CLI: `npm install -g @anthropic-ai/claude-code`
 2. 需要有效的 Claude API 权限
 3. 每个会话启动一个 Claude 进程，多轮对话复用该进程（同一时刻仅处理一条 query，顺序无冲突）
-4. 会话消息历史保存在内存中，重启服务会丢失
-5. 进程在 session 销毁时自动清理
+4. 会话消息历史持久化存储在 `~/.claude/projects/` 目录，重启服务不会丢失
+5. 进程在 session 销毁时或空闲 10 分钟后自动清理
 6. **HTTP 工具审批**：HTTP 下不提供 `canCallTool` 回调时，工具调用会进入待审批队列，通过 `GET /sessions/:id/pending-permissions` 和 `POST /sessions/:id/permissions/:requestId` 进行审批。
+7. **生产环境**：请务必修改 `ADMIN_TOKEN` 环境变量
 
 ## 性能优化
 
 - **进程复用**: 多次查询只启动一次进程，性能提升 66%
 - **流式通信**: 通过 stdin/stdout 进行 JSON 流式通信
-- **资源管理**: session 销毁时自动清理进程和资源
-- **超时保护**: 5 分钟查询超时保护
+- **实时响应**: 支持 partial messages，实现真正的打字机效果
+- **资源管理**: session 销毁时或空闲 10 分钟后自动清理进程
+- **超时保护**: 5 分钟查询超时保护，权限审批默认 5 分钟超时
+- **自动清理**: 会话配额满时自动淘汰最旧的会话
+
+## 开发命令
+
+```bash
+# 安装依赖
+bun install
+
+# 开发模式（热重载）
+bun run dev
+
+# 生产模式
+bun run start
+
+# 构建
+bun run build
+
+# 类型检查
+bun run typecheck
+
+# 运行测试（不需要 Claude CLI）
+bun test
+
+# E2E 测试（需要 Claude CLI）
+bun run test:e2e
+```
 
 ## License
 
