@@ -51,8 +51,6 @@ CMD="
 docker run $DOCKER_FLAGS --name "$CONTAINER_NAME" $DOCKER_USER \
   "${VOLUMES[@]}" \
   -e NODE_TLS_REJECT_UNAUTHORIZED=0 \
-  -e http_proxy=http://proxy.example.com:8080 \
-  -e https_proxy=http://proxy.example.com:8080 \
   -p "${PORT}:9033" \
   ccas:latest bash -c "cd /workspace && $CMD"
 docker logs -f cc-portal
