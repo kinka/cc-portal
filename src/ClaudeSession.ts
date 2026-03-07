@@ -32,8 +32,7 @@ export interface ClaudeSessionOptions {
   initialMessage?: string;
   /** @deprecated use permissionMode: 'bypassPermissions' */
   bypassPermission?: boolean;
-  /** Whether this is a brand new session (--session-id) or resuming existing (--resume). Default true. */
-  isNewSession?: boolean;
+  /** Owner user ID for multi-user sessions. */
   /** Owner user ID for multi-user sessions. */
   ownerId?: string;
   /** Initial list of participant user IDs (besides owner). */
@@ -129,7 +128,6 @@ export class ClaudeSession extends EventEmitter {
       mcpConfigPaths: options.mcpConfigPaths,
       maxTurns: options.maxTurns,
       bypassPermission: options.bypassPermission,
-      isNewSession: options.isNewSession,
       autoAllowToolPatterns: options.autoAllowToolPatterns,
       isAutoAllowTool: options.isAutoAllowTool,
     });
@@ -141,12 +139,7 @@ export class ClaudeSession extends EventEmitter {
       );
     }
 
-    // Auto-sync history when resuming an existing session
-    if (!options.isNewSession) {
-      this.syncHistory().catch(err =>
-        this.log.warn({ err }, 'Failed to sync history on resume')
-      );
-    }
+    // Clean up pending permissions when process dies unexpectedly
 
     // Clean up pending permissions when process dies unexpectedly
     this.backend.on('processDied', () => {

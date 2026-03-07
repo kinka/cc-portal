@@ -141,8 +141,7 @@ export interface ClaudeAgentBackendOptions {
   mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
   mcpConfigPaths?: string[];
   maxTurns?: number;
-  /** If true, use --session-id (new session). If false, use --resume (existing session). */
-  isNewSession?: boolean;
+  /** Idle timeout duration in milliseconds. Process is destroyed after this much inactivity. Defaults to 10 minutes. */
   /**
    * Tool name patterns that skip approval (auto-allow). Used when permissionMode is not bypassPermissions.
    * Each pattern can be exact ("Read") or glob ("mcp__*__get*"). Overrides default read-only list when set.
@@ -168,6 +167,7 @@ export class ClaudeAgentBackend extends EventEmitter {
   private mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
   private mcpConfigPaths?: string[];
   private maxTurns?: number;
+  /** Determined lazily in initialize() by checking if .jsonl file exists */
   private isNewSession = true;
   private autoAllowToolPatterns?: string[];
   private isAutoAllowTool?: (toolName: string, input: unknown) => boolean;
@@ -220,8 +220,7 @@ export class ClaudeAgentBackend extends EventEmitter {
     this.permissionResolver = options.permissionResolver;
     this.mcpServers = options.mcpServers;
     this.mcpConfigPaths = options.mcpConfigPaths;
-    this.maxTurns = options.maxTurns;
-    this.isNewSession = options.isNewSession ?? true;
+    // isNewSession is determined lazily in initialize() by checking if .jsonl file exists
     this.autoAllowToolPatterns = options.autoAllowToolPatterns;
     this.isAutoAllowTool = options.isAutoAllowTool;
     // Backward compat: bypassPermission true => bypassPermissions
@@ -523,6 +522,12 @@ export class ClaudeAgentBackend extends EventEmitter {
       }
     }
 
+    // Check if session file exists to determine --session-id vs --resume
+    const projectHash = ClaudeAgentBackend.calculateProjectHash(this.cwd);
+    const sessionFile = join(homedir(), '.claude', 'projects', projectHash, `${this.claudeSessionId}.jsonl`);
+    const sessionFileExists = existsSync(sessionFile);
+    this.isNewSession = !sessionFileExists;
+    
     // --session-id for new sessions, --resume for existing ones
     const sessionFlag = this.isNewSession ? '--session-id' : '--resume';
     args.push(sessionFlag, this.claudeSessionId);

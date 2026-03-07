@@ -196,7 +196,6 @@ export class ClaudeSessionManager {
     const userMcpConfig = await this.storage.getUserMcpConfig(ownerId);
     const userMcpServers = (userMcpConfig?.mcpServers ?? {}) as Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
     const mergedMcpServers = { ...userMcpServers, ...(options.mcpServers || {}) };
-
     // Register session in cache for immediate access
     this.storage.registerSession(sessionId, ownerId, resolvedPath);
 
@@ -308,17 +307,10 @@ export class ClaudeSessionManager {
     const userMcpConfig = await this.storage.getUserMcpConfig(metadata.ownerId);
     const userMcpServers = (userMcpConfig?.mcpServers ?? {}) as Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
 
-    // If the .jsonl file doesn't exist on disk (e.g. session was killed before first message),
-    // treat it as new so we don't fail with "No conversation found"
-    const fileExistsOnDisk = await this.storage.sessionFileExistsOnDisk(metadata.id, metadata.ownerId);
-    if (!fileExistsOnDisk) {
-      log.info({ sessionId: metadata.id }, 'Session file not found on disk, treating as new session');
-    }
-
+    // ClaudeAgentBackend will auto-detect isNewSession by checking if .jsonl exists
     const session = new ClaudeSession({
       id: metadata.id,
       path: resolvedPath,
-      isNewSession: !fileExistsOnDisk,
       mcpServers: Object.keys(userMcpServers).length > 0 ? userMcpServers : undefined,
       bypassPermission: true,
       sessionContext: this.agentApiBaseUrl
