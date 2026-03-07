@@ -219,16 +219,7 @@ export class CLISessionStorage {
     return false;
   }
 
-  /** Check if the .jsonl file physically exists on disk (i.e., at least one message was exchanged) */
-  async sessionFileExistsOnDisk(sessionId: string, ownerId: string): Promise<boolean> {
-    const sessionFile = join(this.userProjectDir(ownerId), `${sessionId}.jsonl`);
-    try {
-      await access(sessionFile);
-      return true;
-    } catch {
-      return false;
-    }
-  }
+
 
   /**
    * Get session info from CLI storage or cache.

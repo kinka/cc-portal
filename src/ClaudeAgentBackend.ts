@@ -523,10 +523,7 @@ export class ClaudeAgentBackend extends EventEmitter {
     }
 
     // Check if session file exists to determine --session-id vs --resume
-    const projectHash = ClaudeAgentBackend.calculateProjectHash(this.cwd);
-    const sessionFile = join(homedir(), '.claude', 'projects', projectHash, `${this.claudeSessionId}.jsonl`);
-    const sessionFileExists = existsSync(sessionFile);
-    this.isNewSession = !sessionFileExists;
+    this.isNewSession = !ClaudeAgentBackend.sessionFileExists(this.cwd, this.claudeSessionId);
     
     // --session-id for new sessions, --resume for existing ones
     const sessionFlag = this.isNewSession ? '--session-id' : '--resume';
@@ -780,16 +777,25 @@ export class ClaudeAgentBackend extends EventEmitter {
   /**
    * Calculate project hash for Claude CLI storage path.
    * Claude CLI uses a hash of the absolute project path to store session data.
-   * The hash format is: base64url encoding of the path with special character replacements.
    */
-  private static calculateProjectHash(projectPath: string): string {
-    // Claude CLI replaces certain characters in the path for filesystem compatibility
-    // It replaces '/' with '-' and other special chars
+  static calculateProjectHash(projectPath: string): string {
     const normalized = projectPath
       .split('/')
       .filter(Boolean)
       .join('-');
     return `-${normalized}`;
+  }
+
+  /**
+   * Check if a session file exists on disk.
+   * @param cwd - The working directory (project path)
+   * @param sessionId - The session ID
+   * @returns true if the .jsonl file exists
+   */
+  static sessionFileExists(cwd: string, sessionId: string): boolean {
+    const projectHash = ClaudeAgentBackend.calculateProjectHash(cwd);
+    const sessionFile = join(homedir(), '.claude', 'projects', projectHash, `${sessionId}.jsonl`);
+    return existsSync(sessionFile);
   }
 
   /**
