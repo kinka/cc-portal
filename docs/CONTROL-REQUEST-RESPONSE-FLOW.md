@@ -1,6 +1,9 @@
 # control_request / control_response 流程说明
 
-本文档描述 cc-portal 与 Claude CLI 子进程之间，通过 **stdio** 进行的工具权限请求/响应协议（control_request / control_response）。用于在需要用户批准工具调用时，由 CLI 向父进程请求，父进程（cc-portal）决定允许/拒绝后回写响应，CLI 再继续或取消该工具调用。
+本文档描述 cc-portal 与 Claude CLI 子进程之间，通过 **stdio** 进行的工具权限请求/响应协议（control_request / control_response）。
+
+> [!TIP]
+> 想要直观了解完整审批时序（包含前端 SSE 交互），请查看：[工具权限申请时序图与流程说明](./PERMISSION-REQUEST-SEQUENCE.md)。
 
 ---
 
