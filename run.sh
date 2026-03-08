@@ -8,6 +8,11 @@ PORT="${PORT:-9033}"
 
 docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
 
+# 自动修改权限，确保 Docker 内的 ccas 用户可以访问
+echo "🔧 检查并修复目录权限 (portal-claude, users)..."
+mkdir -p portal-claude users
+chmod -R 777 portal-claude users
+
 VOLUMES=(
   -v "$(pwd):/workspace"
   -v cc-portal-npm-global:/usr/local/lib/node_modules
