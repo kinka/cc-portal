@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env bash                                                                              
 # cc-portal 容器启动脚本
 
 set -e
@@ -37,20 +37,28 @@ else
   "
 fi
 
-# Always inject env vars before running the user command
-CMD="
-  if [ -f /home/ccas/.claude/settings.json ]; then
-    eval \$(bun -e \"
-      const d = require('/home/ccas/.claude/settings.json');
-      Object.entries(d.env || {}).forEach(([k,v]) => console.log('export ' + k + '=\'' + v + '\''));
-    \" 2>/dev/null)
-  fi
-  $USER_CMD
-"
+# 在宿主机上从 settings.json 提取环境变量
+SETTINGS_FILE="$(pwd)/portal-claude/settings.json"
+ENV_ARRAY=()
+ENV_COUNT=0
+if [ -f "$SETTINGS_FILE" ]; then
+  # 使用 node 解析 JSON 并添加到环境变量数组
+  while IFS=$'\t' read -r key value; do
+    if [ -n "$key" ]; then
+      ENV_ARRAY+=("-e" "${key}=${value}")
+      ENV_COUNT=$((ENV_COUNT + 1))
+    fi
+  done < <(node -e "
+    const d = require('$SETTINGS_FILE');
+    Object.entries(d.env || {}).forEach(([k,v]) => console.log(k + '\t' + v));
+  " 2>/dev/null)
+  echo "✅ 已从 settings.json 加载 ${ENV_COUNT} 个环境变量"
+fi
 
 docker run $DOCKER_FLAGS --name "$CONTAINER_NAME" $DOCKER_USER \
   "${VOLUMES[@]}" \
   -e NODE_TLS_REJECT_UNAUTHORIZED=0 \
+  "${ENV_ARRAY[@]}" \
   -p "${PORT}:9033" \
-  ccas:latest bash -c "cd /workspace && $CMD"
+  ccas:latest bash -c "cd /workspace && $USER_CMD"
 docker logs -f cc-portal
