@@ -34,11 +34,22 @@ export function registerAdminRoutes(fastify: FastifyInstance, storage: CLISessio
     return { users: usersWithUsed };
   });
 
+  // DELETE /admin/users/:userId - Delete a user
+  fastify.delete('/admin/users/:userId', async (request, reply) => {
+    const { userId } = request.params as { userId: string };
+    const success = await storage.deleteUser(userId);
+    if (!success) {
+      reply.status(500);
+      return { error: 'Failed to delete user' };
+    }
+    return { success: true };
+  });
+
   // GET /admin/sessions - List all sessions from CLI storage
   fastify.get('/admin/sessions', async () => {
     const sessions = await storage.discoverSessions();
     const userSessions: Array<{ sessionId: string; ownerId?: string; projectPath: string; lastModified: string; createdAt: string }> = [];
-    
+
     for (const session of sessions) {
       const ownerId = await storage.getSessionOwner(session.id);
       userSessions.push({
@@ -49,7 +60,7 @@ export function registerAdminRoutes(fastify: FastifyInstance, storage: CLISessio
         createdAt: session.createdAt.toISOString(),
       });
     }
-    
+
     return { sessions: userSessions };
   });
 

@@ -1,4 +1,4 @@
-import { readdir, readFile, stat, writeFile, mkdir, access, unlink } from 'node:fs/promises';
+import { readdir, readFile, stat, writeFile, mkdir, access, unlink, rm } from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
@@ -428,6 +428,42 @@ export class CLISessionStorage {
     }
 
     return users;
+  }
+
+  /**
+   * Delete a user and their directories
+   */
+  async deleteUser(userId: string): Promise<boolean> {
+    await this.initialize();
+    const userDir = join(this.usersDir, userId);
+    const projectDir = this.userProjectDir(userId);
+
+    try {
+      // Remove claude project dir
+      await rm(projectDir, { recursive: true, force: true }).catch(() => { });
+      // Remove user work dir
+      await rm(userDir, { recursive: true, force: true }).catch(() => { });
+
+      // Cleanup participant config
+      let configChanged = false;
+      for (const [sessionId, data] of Object.entries(this.config.participants)) {
+        const initialLen = data.participants.length;
+        data.participants = data.participants.filter(p => p.userId !== userId);
+        if (data.participants.length !== initialLen) {
+          configChanged = true;
+        }
+      }
+      if (configChanged) {
+        await this.saveConfig();
+      }
+
+      this.invalidateDiscoverCache();
+      log.info({ userId }, 'Deleted user and associated data');
+      return true;
+    } catch (err) {
+      log.warn({ err, userId }, 'Failed to delete user');
+      return false;
+    }
   }
 
   // ============ User MCP Methods ============
