@@ -524,7 +524,7 @@ export class ClaudeAgentBackend extends EventEmitter {
 
     // Check if session file exists to determine --session-id vs --resume
     this.isNewSession = !ClaudeAgentBackend.sessionFileExists(this.cwd, this.claudeSessionId);
-    
+
     // --session-id for new sessions, --resume for existing ones
     const sessionFlag = this.isNewSession ? '--session-id' : '--resume';
     args.push(sessionFlag, this.claudeSessionId);
@@ -629,6 +629,21 @@ export class ClaudeAgentBackend extends EventEmitter {
     await this.initialize();
     await this.acquireLock();
 
+    // Declared outside try so it's in scope in finally for cleanup.
+    type PermissionEvent = { type: 'permission_request'; requestId: string; toolName: string; input: unknown };
+    let permissionResolve: ((v: PermissionEvent) => void) | null = null;
+    let permissionPromise: Promise<PermissionEvent> = new Promise((resolve) => {
+      permissionResolve = resolve;
+    });
+    const onPermission = (data: { requestId: string; toolName: string; input: unknown }) => {
+      const res = permissionResolve;
+      if (!res) return;
+      permissionResolve = null;
+      this.off('permissionRequest', onPermission);
+      res({ type: 'permission_request', ...data });
+    };
+    this.once('permissionRequest', onPermission);
+
     try {
       if (!this.child?.stdin) {
         yield { type: 'error', error: 'Claude process not initialized' };
@@ -648,20 +663,10 @@ export class ClaudeAgentBackend extends EventEmitter {
       const timeoutMs = 300_000;
       let timeoutHandle: ReturnType<typeof setTimeout>;
 
-      // Create a promise that resolves on permission request event
-      const waitForPermissionRequest = (): Promise<{ type: 'permission_request'; requestId: string; toolName: string; input: unknown }> =>
-        new Promise((resolve) => {
-          const handler = (data: { requestId: string; toolName: string; input: unknown }) => {
-            this.off('permissionRequest', handler);
-            resolve({ type: 'permission_request', ...data });
-          };
-          this.once('permissionRequest', handler);
-        });
-
-      const nextWithTimeout = (): Promise<SDKMessage | { type: 'permission_request'; requestId: string; toolName: string; input: unknown }> =>
+      const nextWithTimeout = (): Promise<SDKMessage | PermissionEvent> =>
         Promise.race([
           this.messageQueue.next(),
-          waitForPermissionRequest(),
+          permissionPromise,
           new Promise<never>((_, reject) => {
             timeoutHandle = setTimeout(() => reject(new Error('Timeout after 300s')), timeoutMs);
           }),
@@ -751,6 +756,8 @@ export class ClaudeAgentBackend extends EventEmitter {
         }
       }
     } finally {
+      // Clean up the permissionRequest listener if the loop exits without it firing
+      this.off('permissionRequest', onPermission);
       this.releaseConsumerLock();
     }
   }
