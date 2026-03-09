@@ -36,7 +36,8 @@ elif [ -n "$1" ]; then
 else
   DOCKER_USER=""
   USER_CMD="
-    [ ! -f node_modules/.modules.yaml ] && echo '📦 安装依赖...' && bun install
+    echo '📦 正在从 package.json 检查依赖更新...'
+    bun install
     echo '🚀 启动服务 (端口 $PORT)...'
     exec bun src/index.ts
   "
