@@ -92,18 +92,13 @@ export class ClaudeSessionManager {
       // 确保 users 目录存在
       await mkdir(this.usersDir, { recursive: true });
 
-      // 检查 CLAUDE.md 是否已存在
-      await access(claudeMdPath);
-    } catch {
-      // 不存在，从模板复制
-      try {
-        await cp(usersClaudeMdTemplate, claudeMdPath);
-        log.info({ usersDir: this.usersDir }, 'Created users/CLAUDE.md from template');
-      } catch (err) {
-        log.warn({ err }, 'Failed to copy CLAUDE.md template, creating default');
-        // 如果模板不存在，创建一个基础的 CLAUDE.md
-        await writeFile(claudeMdPath, `# CLAUDE.md\n\n用户工作目录配置\n`);
-      }
+      // 总是从模板覆盖，以保证从 src/users-CLAUDE.md 同步最新配置
+      await cp(usersClaudeMdTemplate, claudeMdPath, { force: true });
+      log.info({ usersDir: this.usersDir }, 'Synced users/CLAUDE.md from template');
+    } catch (err) {
+      log.warn({ err }, 'Failed to sync CLAUDE.md template, creating default');
+      // 如果模板不存在，创建一个基础的 CLAUDE.md
+      await writeFile(claudeMdPath, `# CLAUDE.md\n\n用户工作目录配置\n`);
     }
 
     this.usersDirInitialized = true;

@@ -7,7 +7,7 @@
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { buildApp } from '../src/app';
-import { DatabaseManager } from '../src/db';
+import { CLISessionStorage } from '../src/CLISessionStorage';
 import { ClaudeSessionManager } from '../src/ClaudeSessionManager';
 import { mkdtempSync, rmSync, existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -28,7 +28,7 @@ function getMemoryDir(projectPath: string): string {
 describe.skipIf(!runE2E)('E2E: Claude Code Auto Memory Integration', () => {
   let testBaseDir: string;
   let projectDir: string;
-  let db: DatabaseManager;
+  let storage: CLISessionStorage;
   let manager: ClaudeSessionManager;
   let app: ReturnType<typeof buildApp>;
 
@@ -37,13 +37,13 @@ describe.skipIf(!runE2E)('E2E: Claude Code Auto Memory Integration', () => {
     projectDir = join(testBaseDir, 'project');
     mkdirSync(projectDir, { recursive: true });
 
-    db = new DatabaseManager(':memory:');
-    manager = new ClaudeSessionManager(db, { usersDir: join(testBaseDir, 'users') });
-    app = buildApp({ sessionManager: manager, db });
+    storage = new CLISessionStorage(join(testBaseDir, 'users'));
+    manager = new ClaudeSessionManager(storage, { usersDir: join(testBaseDir, 'users') });
+    app = buildApp({ sessionManager: manager, storage });
   });
 
   afterEach(async () => {
-    await app.close().catch(() => {});
+    await app.close().catch(() => { });
     if (existsSync(testBaseDir)) {
       rmSync(testBaseDir, { recursive: true, force: true });
     }
@@ -97,12 +97,12 @@ describe.skipIf(!runE2E)('E2E: Claude Code Auto Memory Integration', () => {
       }
     }, 120_000);
 
-    test('should preserve memory across sessions in same project', async () => {
+    test('should proactively save memory and read it timely in a new session', async () => {
       await app.listen({ port: 0, host: '127.0.0.1' });
       const port = (app.server!.address() as { port: number }).port;
       const base = `http://127.0.0.1:${port}`;
 
-      const userId = 'memory-persist-user';
+      const userId = 'memory-proactive-user';
 
       // 第一个 session
       const createRes1 = await fetch(`${base}/sessions`, {
@@ -111,12 +111,12 @@ describe.skipIf(!runE2E)('E2E: Claude Code Auto Memory Integration', () => {
           'Content-Type': 'application/json',
           'X-User-ID': userId,
         },
-        body: JSON.stringify({ path: projectDir }),
+        body: JSON.stringify({ path: 'proactive-project' }), // 使用相对路径，确保在 users 目录下，能找到 CLAUDE.md
       });
 
       const { sessionId: session1 } = (await createRes1.json()) as { sessionId: string };
 
-      // 发送消息让 Claude 记住一些信息
+      // 发送消息，不使用“请记住”，而是直接说明项目背景，测试主动作出记忆的指令
       await fetch(`${base}/sessions/${session1}/messages`, {
         method: 'POST',
         headers: {
@@ -124,12 +124,12 @@ describe.skipIf(!runE2E)('E2E: Claude Code Auto Memory Integration', () => {
           'X-User-ID': userId,
         },
         body: JSON.stringify({
-          message: '请记住：我的项目名称是 "Test Project Alpha"。',
+          message: '注意！在这个项目中，我们绝对不可以运行在 Node.js 环境下。唯一允许的运行时是 Bun。这是我们的硬性规定。',
         }),
       });
 
-      // 等待处理完成
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // 等待处理完成（Claude 应当会主动调用 remember）
+      await new Promise(resolve => setTimeout(resolve, 15000));
 
       // 删除第一个 session
       await fetch(`${base}/sessions/${session1}`, {
@@ -144,12 +144,12 @@ describe.skipIf(!runE2E)('E2E: Claude Code Auto Memory Integration', () => {
           'Content-Type': 'application/json',
           'X-User-ID': userId,
         },
-        body: JSON.stringify({ path: projectDir }),
+        body: JSON.stringify({ path: 'proactive-project' }),
       });
 
       const { sessionId: session2 } = (await createRes2.json()) as { sessionId: string };
 
-      // 询问 Claude 是否记得之前的信息
+      // 询问 Claude 相关问题，测试它在新开始的会话中是否及时读取了刚才保存的记忆
       const queryRes = await fetch(`${base}/sessions/${session2}/messages`, {
         method: 'POST',
         headers: {
@@ -157,16 +157,18 @@ describe.skipIf(!runE2E)('E2E: Claude Code Auto Memory Integration', () => {
           'X-User-ID': userId,
         },
         body: JSON.stringify({
-          message: '你还记得我的项目名称是什么吗？',
+          message: '请问这个项目的后端推荐运行环境是什么？',
         }),
       });
 
       expect(queryRes.status).toBe(200);
       const { response } = (await queryRes.json()) as { response: string };
 
-      // 如果 auto memory 工作，Claude 应该能记起项目名称
-      // 注意：这不是严格的断言，因为 memory 功能取决于 Claude Code CLI
-      console.log('Claude response:', response);
+      // 如果 auto memory 工作正常，Claude 应该会在读取内存后准确回答出 Bun
+      console.log('Claude timely memory read response:', response);
+      expect(response.toLowerCase()).toContain('bun');
+      // 避免误报：如果它在解释为什么不用 Node.js，那也是正常的，但它应该明确推荐 Bun
+      expect(response.toLowerCase()).toContain('bun');
     }, 180_000);
   });
 
