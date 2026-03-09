@@ -21,9 +21,9 @@ interface AuthOptions {
 export function registerAuthMiddleware(fastify: FastifyInstance, options: AuthOptions) {
   const { storage } = options;
 
-fastify.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
-    // Skip auth for health check, admin routes, and OPTIONS (CORS preflight)
-    if (request.url === '/health' || request.url.startsWith('/admin') || request.method === 'OPTIONS') {
+  fastify.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
+    // Skip auth for health check, admin routes, demo routes, and OPTIONS (CORS preflight)
+    if (request.url === '/health' || request.url.startsWith('/admin') || request.url.startsWith('/demo') || request.method === 'OPTIONS') {
       return;
     }
 

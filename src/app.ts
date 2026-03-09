@@ -1,4 +1,6 @@
 import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyReply } from 'fastify';
+import fastifyStatic from '@fastify/static';
+import { join } from 'node:path';
 import { realpathSync } from 'node:fs';
 import { ClaudeSessionManager } from './ClaudeSessionManager';
 import { CLISessionStorage } from './CLISessionStorage';
@@ -64,6 +66,19 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
     });
     registerAdminRoutes(fastify, storage);
   }
+
+  // Serve demo content
+  fastify.register(fastifyStatic, {
+    root: join(process.cwd(), 'demo'),
+    prefix: '/demo/',
+    index: 'index.html',
+    decorateReply: false, // Avoid conflicts if registered multiple times
+  });
+
+  // Redirect /demo to /demo/ so index.html works correctly
+  fastify.get('/demo', async (_request, reply) => {
+    return reply.redirect('/demo/');
+  });
 
   registerCrossUserRoutes(fastify, userDirectory);
 

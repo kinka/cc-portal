@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-Agent 迭代开发演示</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    header {
+      text-align: center;
+      padding: 30px 0;
+      border-bottom: 1px solid #334155;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 2rem;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: #94a3b8;
+      font-size: 0.95rem;
+    }
+
+    .config-bar {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .config-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .config-item label {
+      font-size: 0.875rem;
+      color: #94a3b8;
+    }
+
+    .config-item input {
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      width: 180px;
+    }
+
+    .config-item input:focus {
+      outline: none;
+      border-color: #60a5fa;
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .agent-card {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid #334155;
+      transition: all 0.3s ease;
+    }
+
+    .agent-card:hover {
+      border-color: #60a5fa;
+    }
+
+    .agent-card.running {
+      border-color: #22c55e;
+      box-shadow: 0 0 15px rgba(34, 197, 94, 0.15);
+    }
+
+    .agent-card.error {
+      border-color: #ef4444;
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.15);
+    }
+
+    .agent-card.completed {
+      border-color: #3b82f6;
+    }
+
+    .agent-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .agent-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .agent-1 {
+      background: linear-gradient(135deg, #f472b6, #db2777);
+    }
+
+    .agent-2 {
+      background: linear-gradient(135deg, #60a5fa, #2563eb);
+    }
+
+    .agent-3 {
+      background: linear-gradient(135deg, #a78bfa, #7c3aed);
+    }
+
+    .agent-info h3 {
+      font-size: 1rem;
+      margin-bottom: 2px;
+    }
+
+    .agent-role {
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 16px;
+      font-size: 0.8rem;
+      margin-bottom: 12px;
+    }
+
+    .status-idle {
+      background: rgba(148, 163, 184, 0.2);
+      color: #94a3b8;
+    }
+
+    .status-running {
+      background: rgba(34, 197, 94, 0.2);
+      color: #22c55e;
+    }
+
+    .status-error {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+    }
+
+    .status-completed {
+      background: rgba(59, 130, 246, 0.2);
+      color: #3b82f6;
+    }
+
+    .pulse {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.4;
+      }
+    }
+
+    .agent-task {
+      background: #0f172a;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      font-size: 0.85rem;
+      color: #cbd5e1;
+      min-height: 40px;
+    }
+
+    .agent-response {
+      background: #0f172a;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      font-size: 0.8rem;
+      color: #94a3b8;
+      max-height: 150px;
+      overflow-y: auto;
+      border-left: 3px solid #60a5fa;
+    }
+
+    .progress-bar {
+      height: 6px;
+      background: #334155;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.5s ease;
+    }
+
+    .agent-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 0.75rem;
+      color: #64748b;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #60a5fa, #3b82f6);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: #334155;
+      color: #e2e8f0;
+    }
+
+    .btn-secondary:hover {
+      background: #475569;
+    }
+
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+    }
+
+    .log-panel {
+      background: #1e293b;
+      border-radius: 12px;
+      border: 1px solid #334155;
+      overflow: hidden;
+    }
+
+    .log-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #334155;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .log-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .log-tab {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: #94a3b8;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .log-tab:hover {
+      border-color: #60a5fa;
+      color: #e2e8f0;
+    }
+
+    .log-tab.active {
+      background: linear-gradient(135deg, #60a5fa, #3b82f6);
+      color: white;
+      border-color: transparent;
+    }
+
+    .log-tab.agent-1-tab.active {
+      background: linear-gradient(135deg, #f472b6, #db2777);
+    }
+
+    .log-tab.agent-2-tab.active {
+      background: linear-gradient(135deg, #60a5fa, #2563eb);
+    }
+
+    .log-tab.agent-3-tab.active {
+      background: linear-gradient(135deg, #a78bfa, #7c3aed);
+    }
+
+    .log-content {
+      display: none;
+      max-height: 400px;
+      overflow-y: auto;
+      padding: 16px;
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 0.8rem;
+    }
+
+    .log-content.active {
+      display: block;
+    }
+
+    .log-list {
+      max-height: 300px;
+      overflow-y: auto;
+      padding: 16px;
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 0.8rem;
+    }
+
+    .log-entry {
+      padding: 6px 0;
+      border-bottom: 1px solid #334155;
+      color: #94a3b8;
+    }
+
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+
+    .log-time {
+      color: #64748b;
+      margin-right: 8px;
+    }
+
+    .log-info {
+      color: #60a5fa;
+    }
+
+    .log-success {
+      color: #22c55e;
+    }
+
+    .log-error {
+      color: #ef4444;
+    }
+
+    .log-warn {
+      color: #f59e0b;
+    }
+
+    .log-tool {
+      color: #22d3ee;
+    }
+
+    .log-detail {
+      color: #94a3b8;
+      font-size: 0.75rem;
+      padding-left: 16px;
+    }
+
+    .workflow-panel {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid #334155;
+    }
+
+    .workflow-title {
+      font-size: 0.9rem;
+      color: #94a3b8;
+      margin-bottom: 16px;
+    }
+
+    .workflow-steps {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .workflow-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .step-box {
+      width: 80px;
+      height: 80px;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      font-size: 0.8rem;
+      border: 2px solid #334155;
+      transition: all 0.3s ease;
+    }
+
+    .step-box.active {
+      border-color: #22c55e;
+      box-shadow: 0 0 15px rgba(34, 197, 94, 0.3);
+    }
+
+    .step-box.completed {
+      border-color: #3b82f6;
+      background: rgba(59, 130, 246, 0.1);
+    }
+
+    .step-avatar {
+      font-size: 24px;
+    }
+
+    .step-name {
+      font-size: 0.75rem;
+      color: #94a3b8;
+    }
+
+    .workflow-arrow {
+      font-size: 24px;
+      color: #475569;
+    }
+
+    .workflow-arrow.active {
+      color: #22c55e;
+    }
+
+    .step-output {
+      font-size: 0.7rem;
+      color: #64748b;
+      max-width: 80px;
+      text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 1024px) {
+      .dashboard {
+        grid-template-columns: 1fr;
+      }
+
+      .config-bar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .config-item input {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <h1>🤖 Multi-Agent 迭代开发演示</h1>
+      <p class="subtitle">架构规划 → 小步快跑迭代（开发+测试交替推进）</p>
+    </header>
+
+    <div class="workflow-panel">
+      <div class="workflow-title">📋 协作流程：架构规划 → 多轮迭代（开发↔测试 小步快跑）</div>
+      <div class="workflow-steps">
+        <div class="workflow-step">
+          <div class="step-box" id="step1">
+            <div class="step-avatar">🏗️</div>
+            <div class="step-name">架构师</div>
+          </div>
+          <div class="step-output" id="output1">等待开始</div>
+        </div>
+        <div class="workflow-arrow" id="arrow1">→</div>
+        <div class="workflow-step">
+          <div class="step-box" id="step2">
+            <div class="step-avatar">💻</div>
+            <div class="step-name">开发者</div>
+          </div>
+          <div class="step-output" id="output2">等待输入</div>
+        </div>
+        <div class="workflow-arrow" id="arrow2">→</div>
+        <div class="workflow-step">
+          <div class="step-box" id="step3">
+            <div class="step-avatar">🧪</div>
+            <div class="step-name">测试者</div>
+          </div>
+          <div class="step-output" id="output3">等待输入</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="config-bar">
+      <div class="config-item">
+        <label>API 地址:</label>
+        <input type="text" id="apiUrl" value="http://localhost:9033" placeholder="http://localhost:9033">
+      </div>
+      <div class="config-item">
+        <label>工作目录:</label>
+        <input type="text" id="workDir" value="/tmp/multi-agent-demo" placeholder="/tmp/multi-agent-demo">
+      </div>
+      <div class="config-item">
+        <label>状态:</label>
+        <span id="connectionStatus" style="color: #94a3b8;">未连接</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-primary" id="btnCreate" onclick="createAgents()">
+        <span>🚀</span> 创建 3 个 Agents
+      </button>
+      <button class="btn btn-primary" id="btnStart" onclick="startCollaboration()" disabled>
+        <span>▶️</span> 开始协作
+      </button>
+      <button class="btn btn-secondary" onclick="fetchSessions()">
+        <span>🔄</span> 刷新状态
+      </button>
+      <button class="btn btn-danger" onclick="clearAll()">
+        <span>🗑️</span> 清空所有
+      </button>
+    </div>
+
+    <div class="dashboard">
+      <div class="agent-card" id="agent1">
+        <div class="agent-header">
+          <div class="agent-avatar agent-1">🏗️</div>
+          <div class="agent-info">
+            <h3>Agent 1</h3>
+            <div class="agent-role">架构师</div>
+          </div>
+        </div>
+        <div class="status-badge status-idle" id="status1">
+          <span>●</span> 未创建
+        </div>
+        <div class="agent-task" id="task1">点击「创建 3 个 Agents」开始</div>
+        <div class="agent-response" id="response1" style="display: none;"></div>
+        <div class="progress-bar">
+          <div class="progress-fill agent-1" id="progress1"
+            style="width: 0%; background: linear-gradient(90deg, #f472b6, #db2777);"></div>
+        </div>
+        <div class="agent-stats">
+          <div>Session: <span id="session1">-</span></div>
+          <div>耗时: <span id="time1">-</span></div>
+        </div>
+      </div>
+
+      <div class="agent-card" id="agent2">
+        <div class="agent-header">
+          <div class="agent-avatar agent-2">💻</div>
+          <div class="agent-info">
+            <h3>Agent 2</h3>
+            <div class="agent-role">实现者</div>
+          </div>
+        </div>
+        <div class="status-badge status-idle" id="status2">
+          <span>●</span> 未创建
+        </div>
+        <div class="agent-task" id="task2">等待创建...</div>
+        <div class="agent-response" id="response2" style="display: none;"></div>
+        <div class="progress-bar">
+          <div class="progress-fill agent-2" id="progress2"
+            style="width: 0%; background: linear-gradient(90deg, #60a5fa, #2563eb);"></div>
+        </div>
+        <div class="agent-stats">
+          <div>Session: <span id="session2">-</span></div>
+          <div>耗时: <span id="time2">-</span></div>
+        </div>
+      </div>
+
+      <div class="agent-card" id="agent3">
+        <div class="agent-header">
+          <div class="agent-avatar agent-3">🧪</div>
+          <div class="agent-info">
+            <h3>Agent 3</h3>
+            <div class="agent-role">测试者</div>
+          </div>
+        </div>
+        <div class="status-badge status-idle" id="status3">
+          <span>●</span> 未创建
+        </div>
+        <div class="agent-task" id="task3">等待创建...</div>
+        <div class="agent-response" id="response3" style="display: none;"></div>
+        <div class="progress-bar">
+          <div class="progress-fill agent-3" id="progress3"
+            style="width: 0%; background: linear-gradient(90deg, #a78bfa, #7c3aed);"></div>
+        </div>
+        <div class="agent-stats">
+          <div>Session: <span id="session3">-</span></div>
+          <div>耗时: <span id="time3">-</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="log-panel">
+      <div class="log-header">
+        <div class="log-tabs">
+          <button class="log-tab active" id="tab-system" onclick="switchLogTab('system')">📋 系统日志</button>
+          <button class="log-tab agent-1-tab" id="tab-agent1" onclick="switchLogTab('agent1')">🏗️ 架构师</button>
+          <button class="log-tab agent-2-tab" id="tab-agent2" onclick="switchLogTab('agent2')">💻 开发者</button>
+          <button class="log-tab agent-3-tab" id="tab-agent3" onclick="switchLogTab('agent3')">🧪 测试者</button>
+        </div>
+        <button class="btn btn-secondary" onclick="clearAllLogs()"
+          style="padding: 6px 12px; font-size: 0.8rem;">清空全部</button>
+      </div>
+
+      <!-- 系统日志 -->
+      <div class="log-content active" id="log-system">
+        <div class="log-entry">等待开始...</div>
+      </div>
+
+      <!-- 架构师日志 -->
+      <div class="log-content" id="log-agent1">
+        <div class="log-entry" style="color: #f472b6;">架构师日志将在这里显示...</div>
+      </div>
+
+      <!-- 开发者日志 -->
+      <div class="log-content" id="log-agent2">
+        <div class="log-entry" style="color: #60a5fa;">开发者日志将在这里显示...</div>
+      </div>
+
+      <!-- 测试者日志 -->
+      <div class="log-content" id="log-agent3">
+        <div class="log-entry" style="color: #a78bfa;">测试者日志将在这里显示...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = () => document.getElementById('apiUrl').value;
+    const WORK_DIR = () => document.getElementById('workDir').value;
+
+    const agents = [
+      { id: 1, name: '架构师', sessionId: null, task: '高层规划+迭代计划', avatar: '🏗️' },
+      { id: 2, name: '开发者', sessionId: null, task: '多轮迭代实现功能', avatar: '💻' },
+      { id: 3, name: '测试者', sessionId: null, task: '每轮跟随测试验证', avatar: '🧪' }
+    ];
+
+    // 系统日志
+    function log(message, type = 'info') {
+      const list = document.getElementById('log-system');
+      const time = new Date().toLocaleTimeString('zh-CN');
+      const div = document.createElement('div');
+      div.className = 'log-entry';
+      div.innerHTML = `<span class="log-time">${time}</span><span class="log-${type}">${message}</span>`;
+      list.appendChild(div);
+      list.scrollTop = list.scrollHeight;
+    }
+
+    // Agent 日志（带颜色区分）
+    function agentLog(agentIndex, message, type = 'info') {
+      const agentColors = ['#f472b6', '#60a5fa', '#a78bfa'];
+      const agentNames = ['架构师', '开发者', '测试者'];
+      const color = agentColors[agentIndex - 1];
+      const name = agentNames[agentIndex - 1];
+
+      const list = document.getElementById(`log-agent${agentIndex}`);
+      const time = new Date().toLocaleTimeString('zh-CN');
+      const div = document.createElement('div');
+
+      // 根据类型设置样式
+      if (type === 'tool') {
+        div.className = 'log-entry';
+        div.innerHTML = `<span class="log-time">${time}</span><span style="color: #22d3ee;">🔧 ${message}</span>`;
+      } else if (type === 'tool-input') {
+        div.className = 'log-entry log-detail';
+        div.innerHTML = `<span style="color: #64748b;">   📥 ${message}</span>`;
+      } else if (type === 'tool-output') {
+        div.className = 'log-entry log-detail';
+        div.innerHTML = `<span style="color: #22c55e;">   📤 ${message}</span>`;
+      } else {
+        div.className = 'log-entry';
+        div.innerHTML = `<span class="log-time">${time}</span><span style="color: ${color}; font-weight: bold;">[${name}]</span> <span class="log-${type}">${message}</span>`;
+      }
+
+      list.appendChild(div);
+      list.scrollTop = list.scrollHeight;
+    }
+
+    // 切换日志标签页
+    function switchLogTab(tabName) {
+      // 隐藏所有日志内容
+      document.querySelectorAll('.log-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.log-tab').forEach(el => el.classList.remove('active'));
+
+      // 显示选中的日志
+      document.getElementById(`log-${tabName}`).classList.add('active');
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+    }
+
+    function clearLogs() {
+      document.getElementById('log-system').innerHTML = '<div class="log-entry">日志已清空</div>';
+    }
+
+    function clearAllLogs() {
+      document.getElementById('log-system').innerHTML = '<div class="log-entry">日志已清空</div>';
+      document.getElementById('log-agent1').innerHTML = '<div class="log-entry" style="color: #f472b6;">架构师日志已清空...</div>';
+      document.getElementById('log-agent2').innerHTML = '<div class="log-entry" style="color: #60a5fa;">开发者日志已清空...</div>';
+      document.getElementById('log-agent3').innerHTML = '<div class="log-entry" style="color: #a78bfa;">测试者日志已清空...</div>';
+    }
+
+    function updateAgentCard(i, status, message, progress = 0) {
+      const card = document.getElementById(`agent${i}`);
+      const statusEl = document.getElementById(`status${i}`);
+      const taskEl = document.getElementById(`task${i}`);
+      const progressEl = document.getElementById(`progress${i}`);
+      const sessionEl = document.getElementById(`session${i}`);
+
+      card.className = 'agent-card' + (status === 'running' ? ' running' : status === 'error' ? ' error' : status === 'completed' ? ' completed' : '');
+      statusEl.className = 'status-badge status-' + status;
+      statusEl.innerHTML = status === 'running' ? '<span class="pulse"></span> 运行中' : status === 'error' ? '<span>❌</span> 错误' : status === 'completed' ? '<span>✅</span> 完成' : '<span>●</span> 等待中';
+      taskEl.textContent = message;
+      progressEl.style.width = progress + '%';
+      if (agents[i - 1].sessionId) {
+        sessionEl.textContent = agents[i - 1].sessionId.slice(0, 8) + '...';
+      }
+    }
+
+    async function checkConnection() {
+      try {
+        const res = await fetch(`${API_URL()}/health`, { method: 'GET' });
+        if (res.ok) {
+          document.getElementById('connectionStatus').textContent = '已连接';
+          document.getElementById('connectionStatus').style.color = '#22c55e';
+          return true;
+        }
+      } catch (e) {
+        document.getElementById('connectionStatus').textContent = '未连接';
+        document.getElementById('connectionStatus').style.color = '#ef4444';
+        log('API 连接失败: ' + e.message, 'error');
+      }
+      return false;
+    }
+
+    async function createAgents() {
+      if (!(await checkConnection())) {
+        alert('请先启动后端服务: bun src/index.ts');
+        return;
+      }
+
+      document.getElementById('btnCreate').disabled = true;
+      log('开始创建 3 个 Agents...');
+
+      await Promise.all(agents.map(async (agent, i) => {
+        const startTime = Date.now();
+        updateAgentCard(i + 1, 'running', '创建 session...', 20);
+
+        try {
+          const res = await fetch(`${API_URL()}/sessions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: WORK_DIR() })
+          });
+
+          if (!res.ok) throw new Error('创建失败: ' + res.status);
+
+          const data = await res.json();
+          agent.sessionId = data.sessionId;
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+          document.getElementById(`time${i + 1}`).textContent = elapsed + 's';
+
+          updateAgentCard(i + 1, 'completed', `Session 创建成功`, 40);
+          log(`Agent ${i + 1} (${agent.name}): Session ${data.sessionId.slice(0, 8)}... 创建成功`, 'success');
+        } catch (e) {
+          updateAgentCard(i + 1, 'error', '创建失败: ' + e.message, 0);
+          log(`Agent ${i + 1} 创建失败: ${e.message}`, 'error');
+        }
+      }));
+
+      document.getElementById('btnStart').disabled = false;
+      log('所有 Agents 创建完成，可以开始协作');
+    }
+
+    // 迭代式协作流程 - 小步快跑
+    async function startCollaboration() {
+      document.getElementById('btnStart').disabled = true;
+      log('开始多 Agent 协作流程...');
+      log('模式: 架构规划 → 多轮迭代开发+测试（小步快跑）');
+
+      // 重置流程图
+      updateWorkflowStep(1, 'active');
+      updateWorkflowStep(2, 'pending');
+      updateWorkflowStep(3, 'pending');
+
+      // ========== 第1步：架构师做高层规划（简洁） ==========
+      log('=== 第 1 步：架构师做高层规划 ===');
+      const architectPrompt = `作为架构师，请为"待办事项 CLI 工具"设计高层规划。
+
+要求：
+1. 模块划分：明确有哪几个模块（如 CLI、Service、Storage）
+2. 接口定义：核心接口的方法签名（不要实现）
+3. 数据结构：核心类型定义
+4. 迭代计划：建议分几轮迭代完成，每轮的目标
+
+请简洁输出，不要写具体实现代码。`;
+
+      const architectResult = await runAgentStep(0, architectPrompt, 20);
+      if (!architectResult) {
+        log('架构规划失败，协作终止', 'error');
+        updateWorkflowStep(1, 'error');
+        return;
+      }
+
+      updateWorkflowStep(1, 'completed', '规划完成');
+      updateWorkflowArrow(1, true);
+
+      // ========== 多轮迭代开发 ==========
+      const iterations = [
+        { name: '骨架搭建', desc: '创建项目结构、类型定义、空接口实现' },
+        { name: '核心功能', desc: '实现增删改查、数据持久化' },
+        { name: '完善功能', desc: '添加筛选、排序、完成标记等' }
+      ];
+
+      let accumulatedCode = `【架构规划】\n${architectResult}\n\n`;
+
+      for (let round = 0; round < iterations.length; round++) {
+        const iter = iterations[round];
+        const progress = 20 + Math.floor((round + 1) * 25);
+
+        log(`=== 迭代 ${round + 1}/${iterations.length}: ${iter.name} ===`);
+        log(`目标: ${iter.desc}`);
+
+        // 开发者实现
+        updateWorkflowStep(2, 'active', `迭代${round + 1}`);
+        const devPrompt = `作为开发者，请完成"${iter.name}"阶段的代码实现。
+
+背景信息：
+${accumulatedCode}
+
+当前迭代目标: ${iter.desc}
+要求：
+1. 使用 TypeScript
+2. 先读取现有代码（如果有）
+3. 实现当前迭代目标，不要过度实现
+4. 确保代码可运行
+5. 写完后验证能编译通过
+
+请开始实现。`;
+
+        const devResult = await runAgentStep(1, devPrompt, progress - 5);
+        if (!devResult) {
+          log(`迭代 ${round + 1} 开发失败`, 'error');
+          updateWorkflowStep(2, 'error');
+          return;
+        }
+
+        accumulatedCode += `\n【迭代${round + 1}代码】\n${devResult}\n`;
+
+        // 测试者验证
+        updateWorkflowStep(3, 'active', `测试${round + 1}`);
+        const testPrompt = `作为测试者，请验证"${iter.name}"阶段的实现。
+
+背景信息：
+${accumulatedCode.substring(0, 2000)}...
+
+当前迭代: ${iter.name} - ${iter.desc}
+要求：
+1. 先查看当前代码实现
+2. 编写针对性的测试用例（Vitest）
+3. 运行测试，确保通过
+4. 如有问题，简要说明
+
+请开始测试。`;
+
+        const testResult = await runAgentStep(2, testPrompt, progress);
+        if (!testResult) {
+          log(`迭代 ${round + 1} 测试失败`, 'error');
+          updateWorkflowStep(3, 'error');
+          return;
+        }
+
+        log(`✅ 迭代 ${round + 1} 完成: ${iter.name}`);
+        updateWorkflowStep(2, 'completed', `迭代${round + 1}✓`);
+        updateWorkflowStep(3, 'completed', `测试${round + 1}✓`);
+      }
+
+      updateWorkflowArrow(2, true);
+      updateWorkflowStep(3, 'completed', '全部完成');
+
+      log('=== 🎉 多 Agent 协作完成！===');
+      log('采用小步快跑方式，经过3轮迭代完成开发');
+      document.getElementById('btnCreate').disabled = false;
+    }
+
+    function updateWorkflowStep(step, state, output = '') {
+      const stepEl = document.getElementById(`step${step}`);
+      const outputEl = document.getElementById(`output${step}`);
+
+      stepEl.className = 'step-box' + (state === 'active' ? ' active' : state === 'completed' ? ' completed' : state === 'error' ? ' error' : '');
+      if (output) outputEl.textContent = output;
+      if (state === 'active') outputEl.textContent = '处理中...';
+      if (state === 'error') outputEl.textContent = '失败';
+    }
+
+    function updateWorkflowArrow(arrow, active) {
+      document.getElementById(`arrow${arrow}`).className = 'workflow-arrow' + (active ? ' active' : '');
+    }
+
+    // 流式运行 Agent 步骤 - 实时显示输出
+    async function runAgentStep(i, prompt, progress) {
+      const agent = agents[i];
+      if (!agent.sessionId) {
+        log(`Agent ${i + 1} 未创建，跳过`, 'warn');
+        return null;
+      }
+
+      const startTime = Date.now();
+      updateAgentCard(i + 1, 'running', '处理中...', progress - 10);
+
+      const responseEl = document.getElementById(`response${i + 1}`);
+      responseEl.style.display = 'block';
+      responseEl.textContent = '';
+
+      return new Promise((resolve, reject) => {
+        const encodedPrompt = encodeURIComponent(prompt);
+        const url = `${API_URL()}/sessions/${agent.sessionId}/stream?message=${encodedPrompt}`;
+
+        log(`Agent ${i + 1} (${agent.name}): 启动流式连接...`);
+
+        const eventSource = new EventSource(url);
+        let fullText = '';
+        let isEnded = false;
+
+        eventSource.onopen = () => {
+          log(`Agent ${i + 1} (${agent.name}): 连接已建立`);
+        };
+
+        eventSource.onmessage = (event) => {
+          if (event.data === '[DONE]') {
+            eventSource.close();
+            isEnded = true;
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            document.getElementById(`time${i + 1}`).textContent = elapsed + 's';
+            updateAgentCard(i + 1, 'completed', `步骤 ${i + 1}/3 完成`, progress);
+            log(`Agent ${i + 1} (${agent.name}): 步骤完成，耗时 ${elapsed}s，输出 ${fullText.length} 字符`, 'success');
+            agentLog(i + 1, `✅ 步骤完成，耗时 ${elapsed}s，输出 ${fullText.length} 字符`);
+            resolve(fullText);
+            return;
+          }
+
+          try {
+            const chunk = JSON.parse(event.data);
+
+            if (chunk.type === 'text' && chunk.content) {
+              fullText += chunk.content;
+              const chunkText = chunk.content;
+
+              // 更新 Agent 卡片显示（最近 800 字符）
+              const displayText = fullText.length > 800
+                ? '...' + fullText.slice(-800)
+                : fullText;
+              responseEl.textContent = displayText;
+              responseEl.scrollTop = responseEl.scrollHeight;
+
+              // 写入 Agent 日志（实时追加）
+              agentLog(i + 1, chunkText, 'info');
+            } else if (chunk.type === 'tool_start') {
+              const toolMsg = `调用工具: ${chunk.toolName}`;
+              log(`Agent ${i + 1} (${agent.name}): 🔧 ${toolMsg}`, 'info');
+              agentLog(i + 1, toolMsg, 'tool');
+
+              // 显示输入参数
+              if (chunk.toolInput) {
+                const inputStr = JSON.stringify(chunk.toolInput, null, 2);
+                const lines = inputStr.split('\n').slice(0, 5); // 最多显示5行
+                agentLog(i + 1, '参数:', 'tool-input');
+                lines.forEach(line => {
+                  agentLog(i + 1, line.substring(0, 100), 'tool-input'); // 每行最多100字符
+                });
+                if (inputStr.split('\n').length > 5) {
+                  agentLog(i + 1, '... (参数截断)', 'tool-input');
+                }
+              }
+            } else if (chunk.type === 'tool_output') {
+              // 显示输出结果
+              let outputStr = '';
+              if (chunk.toolOutput) {
+                if (typeof chunk.toolOutput === 'object') {
+                  if (chunk.toolOutput.content) {
+                    outputStr = String(chunk.toolOutput.content);
+                  } else if (chunk.toolOutput.output) {
+                    outputStr = String(chunk.toolOutput.output);
+                  } else {
+                    outputStr = JSON.stringify(chunk.toolOutput, null, 2);
+                  }
+                } else {
+                  outputStr = String(chunk.toolOutput);
+                }
+              }
+
+              if (outputStr) {
+                const lines = outputStr.split('\n').slice(0, 10); // 最多显示10行
+                agentLog(i + 1, '结果:', 'tool-output');
+                lines.forEach(line => {
+                  agentLog(i + 1, line.substring(0, 120), 'tool-output'); // 每行最多120字符
+                });
+                if (outputStr.split('\n').length > 10) {
+                  agentLog(i + 1, `... (${outputStr.split('\n').length - 10} 行省略)`, 'tool-output');
+                }
+              } else {
+                agentLog(i + 1, '结果: (空)', 'tool-output');
+              }
+            } else if (chunk.type === 'error') {
+              log(`Agent ${i + 1} 错误: ${chunk.error}`, 'error');
+              agentLog(i + 1, `❌ 错误: ${chunk.error}`, 'error');
+            }
+          } catch (e) {
+            // 非 JSON 数据，可能是原始文本
+            const text = event.data;
+            fullText += text;
+            responseEl.textContent = fullText.length > 800
+              ? '...' + fullText.slice(-800)
+              : fullText;
+            agentLog(i + 1, text, 'info');
+          }
+        };
+
+        eventSource.onerror = (error) => {
+          if (!isEnded) {
+            eventSource.close();
+            updateAgentCard(i + 1, 'error', '连接错误', progress - 10);
+            log(`Agent ${i + 1} 连接错误`, 'error');
+            reject(new Error('SSE connection error'));
+          }
+        };
+      });
+    }
+
+    async function fetchSessions() {
+      if (!(await checkConnection())) return;
+
+      try {
+        const res = await fetch(`${API_URL()}/sessions`);
+        const data = await res.json();
+        log(`当前 Sessions: ${data.sessions.length} 个`);
+        data.sessions.forEach(s => {
+          log(`  - ${s.sessionId.slice(0, 8)}... (${s.status})`);
+        });
+      } catch (e) {
+        log('获取 sessions 失败: ' + e.message, 'error');
+      }
+    }
+
+    async function clearAll() {
+      if (!(await checkConnection())) return;
+
+      log('清空所有 sessions...');
+
+      // 获取所有 sessions
+      try {
+        const res = await fetch(`${API_URL()}/sessions`);
+        const data = await res.json();
+
+        await Promise.all(data.sessions.map(async s => {
+          try {
+            await fetch(`${API_URL()}/sessions/${s.sessionId}`, { method: 'DELETE' });
+            log(`删除 session: ${s.sessionId.slice(0, 8)}...`, 'success');
+          } catch (e) {
+            log(`删除失败: ${e.message}`, 'error');
+          }
+        }));
+
+        // 重置状态
+        agents.forEach((agent, i) => {
+          agent.sessionId = null;
+          updateAgentCard(i + 1, 'idle', '已清空', 0);
+          document.getElementById(`session${i + 1}`).textContent = '-';
+          document.getElementById(`time${i + 1}`).textContent = '-';
+          document.getElementById(`response${i + 1}`).style.display = 'none';
+        });
+
+        document.getElementById('btnCreate').disabled = false;
+        document.getElementById('btnStart').disabled = true;
+        log('所有 sessions 已清空');
+      } catch (e) {
+        log('清空失败: ' + e.message, 'error');
+      }
+    }
+
+    // 页面加载时检查连接
+    window.onload = () => checkConnection();
+  </script>
+</body>
+
+</html>
