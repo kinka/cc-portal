@@ -169,8 +169,8 @@ export class WeComChannel {
             let lastSentLength = 0;
             let lastSentTime = Date.now();
             let buffer = '';
-            const UPDATE_THRESHOLD_CHARS = 20;
-            const UPDATE_THRESHOLD_MS = 500;
+            const UPDATE_THRESHOLD_CHARS = 1;
+            const UPDATE_THRESHOLD_MS = 200;
 
             log.debug({ wecomUserId, sessionId, streamId }, 'Starting streaming reply to WeCom');
 
