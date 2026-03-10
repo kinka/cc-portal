@@ -141,6 +141,8 @@ export class WeComChannel {
         const isGroup = body.chattype === 'group';
         const chatid = body.chatid;
 
+        log.debug({ frame }, 'Incoming WeCom Frame');
+
         // Session 路由逻辑：如果是群聊，使用 chatid 隔离；如果是私聊，使用 userid 隔离
         // 增加前缀以防止 userid 和 chatid 冲突
         const sessionKey = isGroup && chatid ? `group:${chatid}` : wecomUserId;

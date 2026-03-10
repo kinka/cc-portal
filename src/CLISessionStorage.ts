@@ -595,6 +595,11 @@ export class CLISessionStorage {
     const owner = await this.getSessionOwner(sessionId);
     if (owner === userId) return true;
 
+    // A group session (owned by 'group:...') is accessible to any user in that group.
+    // In our current simple model, we allow any valid user to access group-owned sessions
+    // to facilitate shared history and configuration inheritance.
+    if (owner?.startsWith('group:')) return true;
+
     // Check if participant
     const participants = this.config.participants[sessionId]?.participants || [];
     return participants.some(p => p.userId === userId && p.status === 'joined');
