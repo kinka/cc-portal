@@ -165,18 +165,17 @@ export class WeComChannel {
             }
 
             // 使用流式回复
-            const streamId = generateReqId('stream');
-            let lastSentLength = 0;
+            const UPDATE_THRESHOLD_MS = 200;
+            let activeStreamId = generateReqId('stream');
+
+            log.debug({ wecomUserId, sessionId, activeStreamId }, 'Starting streaming reply to WeCom');
+
+            // 立即发送"思考中"状态
+            activeStreamId = await this.safeReplyStream(frame, activeStreamId, '🤔 正在思考中...', false);
+            let lastSentLength = '🤔 正在思考中...'.length;
             let lastSentTime = Date.now();
             let buffer = '';
             const UPDATE_THRESHOLD_CHARS = 1;
-            const UPDATE_THRESHOLD_MS = 200;
-
-            log.debug({ wecomUserId, sessionId, streamId }, 'Starting streaming reply to WeCom');
-
-            // 立即发送"思考中"状态
-            await this.wsClient.replyStream(frame, streamId, '🤔 正在思考中...', false);
-            lastSentLength = '🤔 正在思考中...'.length;
 
             const stream = session.sendMessageStream(userText, wecomUserId);
 
@@ -189,7 +188,7 @@ export class WeComChannel {
                     if (currentBuffer.length > 2000) {
                         currentBuffer = currentBuffer.substring(0, 1900) + '\n\n... (内容已达限额)';
                     }
-                    await this.wsClient.replyStream(frame, streamId, currentBuffer, false);
+                    activeStreamId = await this.safeReplyStream(frame, activeStreamId, currentBuffer, false);
                     lastSentLength = buffer.length;
                     continue;
                 }
@@ -235,7 +234,7 @@ export class WeComChannel {
                         if (currentContent.length > 2000) {
                             currentContent = currentContent.substring(0, 1900) + '\n\n... (内容较长，将分段发送)';
                         }
-                        await this.wsClient.replyStream(frame, streamId, currentContent, false);
+                        activeStreamId = await this.safeReplyStream(frame, activeStreamId, currentContent, false);
                         lastSentLength = buffer.length;
                         lastSentTime = now;
                     }
@@ -247,10 +246,11 @@ export class WeComChannel {
             const segments = this.splitMessage(finalContent, 2000);
 
             for (let i = 0; i < segments.length; i++) {
-                // 如果是第一段，复用已经开始的 streamId
-                // 如果是后续段落，需要产生新的 reqId/streamId（虽然对 WeCom 来说都是独立回复）
-                const currentId = i === 0 ? streamId : generateReqId('stream');
-                await this.wsClient.replyStream(frame, currentId, segments[i], true);
+                // 如果是后续段落，或者检测到流失效，safeReplyStream 会自动切换 ID
+                activeStreamId = await this.safeReplyStream(frame, activeStreamId, segments[i], true);
+                if (i < segments.length - 1) {
+                    activeStreamId = generateReqId('stream'); // 强制下一段开启新 stream
+                }
             }
 
             log.info({ wecomUserId, sessionId, segments: segments.length }, 'WeCom multi-segment reply completed');
@@ -372,5 +372,26 @@ export class WeComChannel {
         }
 
         return segments;
+    }
+
+    /**
+     * 安全发送流式消息，如果检测到流失效（846608），自动切换 streamId 并重试
+     */
+    private async safeReplyStream(frame: any, streamId: string, content: string, finish: boolean): Promise<string> {
+        try {
+            await this.wsClient.replyStream(frame, streamId, content, finish);
+            return streamId;
+        } catch (err: any) {
+            // 企业微信错误码 846608：流式消息更新超时（超过 6 分钟）
+            if (err?.errcode === 846608) {
+                const newStreamId = generateReqId('stream');
+                log.info({ oldStreamId: streamId, newStreamId }, 'WeCom stream expired (>6m), restarting with fresh ID');
+
+                // 使用新 ID 重新发送当前内容
+                await this.wsClient.replyStream(frame, newStreamId, content, finish);
+                return newStreamId;
+            }
+            throw err;
+        }
     }
 }
