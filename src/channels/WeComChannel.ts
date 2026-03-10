@@ -152,8 +152,9 @@ export class WeComChannel {
 
         try {
             // 查找或创建 cc-portal session
-            const sessionId = await this.getOrCreateSession(sessionKey, manager, storage);
-            const session = await manager.getSession(sessionId, sessionKey);
+            // 传入 wecomUserId 作为 configOwnerId，确保会话继承说话人的工具配置
+            const sessionId = await this.getOrCreateSession(sessionKey, wecomUserId, manager, storage);
+            const session = await manager.getSession(sessionId, wecomUserId);
 
             if (!session) {
                 log.error({ sessionKey, sessionId }, 'Session not found after creation');
@@ -255,6 +256,7 @@ export class WeComChannel {
      */
     private async getOrCreateSession(
         sessionKey: string,
+        initiatorUserId: string,
         manager: ClaudeSessionManager,
         storage: CLISessionStorage,
     ): Promise<string> {
@@ -291,6 +293,7 @@ export class WeComChannel {
 
         const session = await manager.createSession({
             ownerId: sessionKey,
+            configOwnerId: initiatorUserId, // 关键：继承创建者的配置
             permissionMode: 'bypassPermissions',
         });
 

@@ -14,6 +14,7 @@ const usersClaudeMdTemplate = join(__dirname, 'users-CLAUDE.md');
 
 export interface CreateSessionOptions {
   ownerId: string;
+  configOwnerId?: string; // Optional: separate config ownership from storage ownership
   /** Optional caller-supplied session UUID. If omitted, one is generated server-side. Must be a valid UUID v4. */
   sessionId?: string;
   path?: string;
@@ -156,7 +157,8 @@ export class ClaudeSessionManager {
   }
 
   async createSession(options: CreateSessionOptions): Promise<ClaudeSession> {
-    const { ownerId } = options;
+    const { ownerId, configOwnerId } = options;
+    const configId = configOwnerId || ownerId;
 
     // Ensure user exists and check quota
     const user = await this.storage.getOrCreateUser(ownerId);
@@ -189,7 +191,7 @@ export class ClaudeSessionManager {
     const resolvedPath = await this.resolveUserPath(ownerId, options.path);
 
     // Read user's MCP config and merge with session options (pass inline to skip trust prompt)
-    const userMcpConfig = await this.storage.getUserMcpConfig(ownerId);
+    const userMcpConfig = await this.storage.getUserMcpConfig(configId);
     const userMcpServers = (userMcpConfig?.mcpServers ?? {}) as Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
     const mergedMcpServers = { ...userMcpServers, ...(options.mcpServers || {}) };
     // Register session in cache for immediate access
@@ -212,7 +214,7 @@ export class ClaudeSessionManager {
         autoAllowToolPatterns: options.autoAllowToolPatterns,
         ownerId,
         sessionContext: this.agentApiBaseUrl
-          ? { apiBaseUrl: this.agentApiBaseUrl, userId: ownerId }
+          ? { apiBaseUrl: this.agentApiBaseUrl, userId: configId }
           : undefined,
       });
 
@@ -275,9 +277,11 @@ export class ClaudeSessionManager {
     const ownerId = await this.storage.getSessionOwner(sessionId);
 
     // Lazy load from CLI
+    // For group sessions, use the current userId to provide tools/context
     const loadPromise = this.lazyLoadSession({
       id: sessionId,
       ownerId: ownerId || 'unknown',
+      configOwnerId: userId, // Current user provides the config
       path: '', // Will be determined from CLI storage
     });
 
@@ -291,6 +295,7 @@ export class ClaudeSessionManager {
   private async lazyLoadSession(metadata: {
     id: string;
     ownerId: string;
+    configOwnerId?: string;
     path: string;
   }): Promise<ClaudeSession> {
     log.info({ sessionId: metadata.id, ownerId: metadata.ownerId }, 'Lazy loading session from CLI storage');
@@ -298,9 +303,10 @@ export class ClaudeSessionManager {
     // Get session info from CLI storage
     const sessionInfo = await this.storage.getSessionInfo(metadata.id);
     const resolvedPath = sessionInfo?.projectPath || metadata.path || process.cwd();
+    const configId = metadata.configOwnerId || metadata.ownerId;
 
     // Read user's MCP config inline (avoids trust prompt for file-based discovery)
-    const userMcpConfig = await this.storage.getUserMcpConfig(metadata.ownerId);
+    const userMcpConfig = await this.storage.getUserMcpConfig(configId);
     const userMcpServers = (userMcpConfig?.mcpServers ?? {}) as Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
 
     // ClaudeAgentBackend will auto-detect isNewSession by checking if .jsonl exists
@@ -310,7 +316,7 @@ export class ClaudeSessionManager {
       mcpServers: Object.keys(userMcpServers).length > 0 ? userMcpServers : undefined,
       bypassPermission: true,
       sessionContext: this.agentApiBaseUrl
-        ? { apiBaseUrl: this.agentApiBaseUrl, userId: metadata.ownerId }
+        ? { apiBaseUrl: this.agentApiBaseUrl, userId: configId }
         : undefined,
     });
 
