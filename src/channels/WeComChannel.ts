@@ -47,6 +47,17 @@ export class WeComChannel {
         this.wsClient = new AiBot.WSClient({
             botId: this.options.botId,
             secret: this.options.secret,
+            logger: {
+                debug: (...args) => {
+                    // 仅在主进程设置了 WECOM_DEBUG 或处于开发模式时输出 SDK 内部 debug 日志
+                    if (process.env.WECOM_DEBUG === 'true' || process.env.NODE_ENV !== 'production') {
+                        log.debug({}, ...args);
+                    }
+                },
+                info: (...args) => log.info({}, ...args),
+                warn: (...args) => log.warn({}, ...args),
+                error: (...args) => log.error({}, ...args),
+            }
         });
     }
 
