@@ -2,6 +2,7 @@ import { buildApp } from './app';
 import { ClaudeSessionManager } from './ClaudeSessionManager';
 import { CLISessionStorage } from './CLISessionStorage';
 import { logger } from './logger';
+import { WeComChannel } from './channels/WeComChannel';
 
 const start = async () => {
   const port = parseInt(process.env.PORT || '9033', 10);
@@ -45,6 +46,24 @@ const start = async () => {
       logger.info('  GET  /admin/stats                          - Service statistics');
       logger.info('');
       logger.info('Session storage: CLI-based (~/.claude/projects/)');
+
+      // 若配置了企业微信机器人，启动长连接渠道
+      const wecomBotId = process.env.WECOM_BOT_ID;
+      const wecomSecret = process.env.WECOM_BOT_SECRET;
+      if (wecomBotId && wecomSecret) {
+        const wecomChannel = new WeComChannel({
+          botId: wecomBotId,
+          secret: wecomSecret,
+          manager,
+          storage,
+          usersDir,
+          welcomeMsg: process.env.WECOM_WELCOME_MSG,
+        });
+        wecomChannel.connect();
+        logger.info({ botId: wecomBotId }, '📱 WeCom channel enabled');
+      } else {
+        logger.info('📱 WeCom channel disabled (set WECOM_BOT_ID and WECOM_BOT_SECRET to enable)');
+      }
     } catch (err) {
       logger.error({ err: String(err) }, 'Failed to start server');
       process.exit(1);
