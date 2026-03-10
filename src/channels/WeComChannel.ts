@@ -50,7 +50,7 @@ export class WeComChannel {
             logger: {
                 debug: (...args) => {
                     // 仅在主进程设置了 WECOM_DEBUG 或处于开发模式时输出 SDK 内部 debug 日志
-                    if (process.env.WECOM_DEBUG === 'true' || process.env.NODE_ENV !== 'production') {
+                    if (process.env.WECOM_DEBUG === '1') {
                         log.debug({}, ...args);
                     }
                 },
@@ -185,7 +185,11 @@ export class WeComChannel {
                 if (chunk.type === 'permission_request') {
                     const msg = '\n> ⚠️ 工具执行需要权限，在 WeCom 渠道已自动绕过或跳过。\n';
                     buffer += msg;
-                    await this.wsClient.replyStream(frame, streamId, buffer, false);
+                    let currentBuffer = buffer;
+                    if (currentBuffer.length > 2000) {
+                        currentBuffer = currentBuffer.substring(0, 1900) + '\n\n... (内容已达限额)';
+                    }
+                    await this.wsClient.replyStream(frame, streamId, currentBuffer, false);
                     lastSentLength = buffer.length;
                     continue;
                 }
@@ -226,29 +230,55 @@ export class WeComChannel {
                     const timeSinceLast = now - lastSentTime;
 
                     if (charsSinceLast >= UPDATE_THRESHOLD_CHARS || timeSinceLast >= UPDATE_THRESHOLD_MS) {
-                        await this.wsClient.replyStream(frame, streamId, buffer, false);
+                        let currentContent = buffer;
+                        // 流式更新时，如果接近限额，提示用户后续会有更多消息
+                        if (currentContent.length > 2000) {
+                            currentContent = currentContent.substring(0, 1900) + '\n\n... (内容较长，将分段发送)';
+                        }
+                        await this.wsClient.replyStream(frame, streamId, currentContent, false);
                         lastSentLength = buffer.length;
                         lastSentTime = now;
                     }
                 }
             } // end for await loop
 
-            // 发送最终完整内容（finish=true）
+            // 分段发送最终内容，确保不丢失信息
             const finalContent = buffer.trim() || '（无内容）';
-            await this.wsClient.replyStream(frame, streamId, finalContent, true);
+            const segments = this.splitMessage(finalContent, 2000);
 
-            log.info({ wecomUserId, sessionId }, 'WeCom stream reply completed');
-        } catch (err) {
-            log.error({ err: String(err), wecomUserId }, 'Failed to handle WeCom message');
+            for (let i = 0; i < segments.length; i++) {
+                // 如果是第一段，复用已经开始的 streamId
+                // 如果是后续段落，需要产生新的 reqId/streamId（虽然对 WeCom 来说都是独立回复）
+                const currentId = i === 0 ? streamId : generateReqId('stream');
+                await this.wsClient.replyStream(frame, currentId, segments[i], true);
+            }
+
+            log.info({ wecomUserId, sessionId, segments: segments.length }, 'WeCom multi-segment reply completed');
+        } catch (err: any) {
+            const errMsg = err?.message || err?.error || String(err);
+            log.error({ err, wecomUserId, errMsg }, 'Failed to handle WeCom message');
+
+            // 如果是对象，尝试详细字符串化
+            let detailMsg = '';
+            if (typeof err === 'object' && err !== null) {
+                try {
+                    detailMsg = JSON.stringify(err);
+                } catch {
+                    detailMsg = '[Unserializable Object]';
+                }
+            } else {
+                detailMsg = String(err);
+            }
+
             try {
                 await this.wsClient.replyStream(
                     frame,
                     generateReqId('stream'),
-                    `❌ 处理消息时出错：${String(err)}`,
+                    `❌ 处理消息时出错：${detailMsg.substring(0, 1000)}`,
                     true,
                 );
-            } catch {
-                // 忽略回复失败
+            } catch (replyErr) {
+                log.error({ err: String(replyErr) }, 'Failed to send error reply');
             }
         }
     }
@@ -302,5 +332,45 @@ export class WeComChannel {
         this.userSessionMap.set(sessionKey, session.id);
         log.info({ sessionKey, sessionId: session.id }, 'Session created');
         return session.id;
+    }
+
+    /**
+     * 将长文本切分为多个片段，尽量在换行符处切割
+     */
+    private splitMessage(text: string, maxLength: number): string[] {
+        if (text.length <= maxLength) return [text];
+
+        const segments: string[] = [];
+        let remaining = text;
+
+        while (remaining.length > 0) {
+            if (remaining.length <= maxLength) {
+                segments.push(remaining);
+                break;
+            }
+
+            let splitIndex = -1;
+            const chunk = remaining.substring(0, maxLength);
+
+            // 优先在双换行切分（段落）
+            splitIndex = chunk.lastIndexOf('\n\n');
+            // 其次在单换行切分
+            if (splitIndex < maxLength * 0.6) {
+                splitIndex = chunk.lastIndexOf('\n');
+            }
+            // 实在不行在空格切分
+            if (splitIndex < maxLength * 0.6) {
+                splitIndex = chunk.lastIndexOf(' ');
+            }
+            // 如果都找不到合适的切分点，或者切分点太靠前，则强制切分
+            if (splitIndex < maxLength * 0.2) {
+                splitIndex = maxLength;
+            }
+
+            segments.push(remaining.substring(0, splitIndex).trim());
+            remaining = remaining.substring(splitIndex).trim();
+        }
+
+        return segments;
     }
 }
