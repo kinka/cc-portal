@@ -99,24 +99,43 @@ export interface StreamChunk {
 /** Async queue: read loop pushes, query/queryStream pull */
 class AsyncMessageQueue {
   private queue: SDKMessage[] = [];
-  private waiters: Array<(msg: SDKMessage) => void> = [];
+  private waiters: Array<{ resolve: (msg: SDKMessage) => void; reject: (err: Error) => void }> = [];
+  private isError: Error | null = null;
 
   enqueue(msg: SDKMessage): void {
+    if (this.isError) return;
     if (this.waiters.length > 0) {
       const w = this.waiters.shift()!;
-      w(msg);
+      w.resolve(msg);
     } else {
       this.queue.push(msg);
     }
   }
 
   async next(): Promise<SDKMessage> {
+    if (this.isError) throw this.isError;
     if (this.queue.length > 0) {
       return this.queue.shift()!;
     }
-    return new Promise<SDKMessage>((resolve) => {
-      this.waiters.push(resolve);
+    return new Promise<SDKMessage>((resolve, reject) => {
+      this.waiters.push({ resolve, reject });
     });
+  }
+
+  errorAll(err: Error): void {
+    this.isError = err;
+    this.queue = [];
+    const currentWaiters = this.waiters;
+    this.waiters = [];
+    for (const w of currentWaiters) {
+      w.reject(err);
+    }
+  }
+
+  reset(): void {
+    this.isError = null;
+    this.queue = [];
+    // We don't want to clear waiters here, as they might belong to a new query
   }
 
   hasPending(): boolean {
@@ -541,6 +560,7 @@ export class ClaudeAgentBackend extends EventEmitter {
       log.error({ error: error.message }, 'Process error');
       this.isInitialized = false;
       this.clearIdleTimer();
+      this.messageQueue.errorAll(error);
     });
     this.child.on('close', (code) => {
       log.info({ code }, 'Process exited');
@@ -549,6 +569,7 @@ export class ClaudeAgentBackend extends EventEmitter {
       this.clearIdleTimer();
       // Notify listeners that process died (for cleaning up pending permissions)
       this.emit('processDied', { code });
+      this.messageQueue.errorAll(new Error(`Claude process exited with code ${code}`));
     });
     let stderrBuffer = '';
     this.child.stderr!.on('data', (data) => {
@@ -562,6 +583,7 @@ export class ClaudeAgentBackend extends EventEmitter {
       this.isInitialized = true;
       this.startReadLoop();
       this.resetIdleTimer();
+      this.messageQueue.reset(); // Clear any errors from previous process death
       return;
     }
     const exitCode = this.child?.exitCode;
@@ -801,7 +823,8 @@ export class ClaudeAgentBackend extends EventEmitter {
   static sessionFileExists(cwd: string, sessionId: string): boolean {
     const projectHash = ClaudeAgentBackend.calculateProjectHash(cwd);
     const sessionFile = join(homedir(), '.claude', 'projects', projectHash, `${sessionId}.jsonl`);
-    return existsSync(sessionFile);
+    // Check if the .jsonl file actually exists with content
+    return existsSync(sessionFile) && readFileSync(sessionFile, 'utf8').trim().length > 0;
   }
 
   /**
@@ -922,15 +945,31 @@ export class ClaudeAgentBackend extends EventEmitter {
     }
   }
 
-  destroy(): void {
+  /** Destroy the underlying process and clear state. */
+  destroy() {
     this.clearIdleTimer();
-    for (const ctrl of this.cancelControllers.values()) ctrl.abort();
-    this.cancelControllers.clear();
-    if (this.child && !this.child.killed) {
-      log.info('Destroying process');
+    // Notify waiters to exit
+    this.messageQueue.errorAll(new Error('Backend destroyed'));
+    // Release any consumer lock
+    this.releaseConsumerLock();
+
+    if (this.child) {
       this.child.kill('SIGTERM');
+      // Force kill if necessary after a short wait
+      const c = this.child;
+      setTimeout(() => {
+        if (!c.killed && c.exitCode === null) {
+          try {
+            c.kill('SIGKILL');
+          } catch { /* ignore */ }
+        }
+      }, 2000);
+      this.child = undefined;
     }
-    this.rl?.close();
+    if (this.rl) {
+      this.rl.close();
+      this.rl = undefined;
+    }
     this.isInitialized = false;
     this.readLoopStarted = false;
   }

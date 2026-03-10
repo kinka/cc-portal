@@ -152,6 +152,25 @@ export class WeComChannel {
             'Received WeCom message'
         );
 
+        // 检查终止指令
+        const stopKeywords = ['停止', 'stop', '/stop', '取消', '退出'];
+        if (stopKeywords.includes(userText.trim().toLowerCase())) {
+            const sessionId = this.userSessionMap.get(sessionKey);
+            if (sessionId) {
+                log.info({ sessionKey, sessionId }, 'User requested to stop session');
+                manager.evictSessionInstance(sessionId);
+                // 从内存映射中移除，确保下次消息重新建立连接（resume）
+                this.userSessionMap.delete(sessionKey);
+                await this.wsClient.replyStream(
+                    frame,
+                    generateReqId('stream'),
+                    '✅ 已停止当前输出。你可以发送新消息开始新的对话气泡。',
+                    true
+                );
+                return;
+            }
+        }
+
         try {
             // 查找或创建 cc-portal session
             // 传入 wecomUserId 作为 configOwnerId，确保会话继承说话人的工具配置

@@ -406,6 +406,19 @@ export class ClaudeSessionManager {
     }
   }
 
+  /**
+   * Remove a session instance from memory cache without deleting it from storage.
+   * Useful for stopping/restarting a session without losing history.
+   */
+  evictSessionInstance(sessionId: string): void {
+    const entry = this.sessions.get(sessionId);
+    if (entry?.session && entry.session instanceof ClaudeSession) {
+      entry.session.destroy();
+    }
+    this.sessions.delete(sessionId);
+    log.info({ sessionId }, 'Session evicted from memory cache');
+  }
+
   async getUserSessionCount(userId: string): Promise<number> {
     return this.storage.getUserSessionCount(userId);
   }
