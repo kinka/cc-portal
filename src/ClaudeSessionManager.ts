@@ -39,6 +39,7 @@ export interface SessionInfo {
   id: string;
   path: string;
   createdAt: string;
+  lastModified: string;
   ownerId: string;
 }
 
@@ -333,12 +334,16 @@ export class ClaudeSessionManager {
   async listSessions(userId: string): Promise<SessionInfo[]> {
     const userSessions = await this.storage.listUserSessions(userId);
 
-    return userSessions.map(s => ({
+    const sessions = userSessions.map(s => ({
       id: s.id,
       path: s.path || '',
-      createdAt: new Date().toISOString(),
+      createdAt: s.lastModified.toISOString(), // Simplified
+      lastModified: s.lastModified.toISOString(),
       ownerId: s.ownerId,
     }));
+
+    // Sort by lastModified descending (newest first)
+    return sessions.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
   }
 
   async deleteSession(sessionId: string, userId: string): Promise<boolean> {

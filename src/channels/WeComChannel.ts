@@ -235,18 +235,35 @@ export class WeComChannel {
         manager: ClaudeSessionManager,
         storage: CLISessionStorage,
     ): Promise<string> {
-        const existing = this.userSessionMap.get(wecomUserId);
-        if (existing) {
-            // 验证 session 仍然有效
-            const session = await manager.getSession(existing, wecomUserId);
-            if (session) return existing;
-            // session 失效，移除并重新创建
+        // 1. First check in-memory map
+        let sessionId = this.userSessionMap.get(wecomUserId);
+
+        if (sessionId) {
+            // Validate session is still active/valid in manager
+            const session = await manager.getSession(sessionId, wecomUserId);
+            if (session) return sessionId;
+            // session invalid or expired, remove from map
             this.userSessionMap.delete(wecomUserId);
         }
 
+        // 2. If not in memory, check storage for existing sessions (persistence across restarts)
+        log.info({ wecomUserId }, 'Checking storage for existing sessions for WeCom user');
+        const existingSessions = await storage.listUserSessions(wecomUserId);
+
+        if (existingSessions.length > 0) {
+            // Sort by lastModified descending and pick the newest one
+            existingSessions.sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime());
+            const mostRecent = existingSessions[0];
+
+            log.info({ wecomUserId, sessionId: mostRecent.id, lastModified: mostRecent.lastModified }, 'Resuming existing session for WeCom user');
+            this.userSessionMap.set(wecomUserId, mostRecent.id);
+            return mostRecent.id;
+        }
+
+        // 3. Create new session if none found
         log.info({ wecomUserId }, 'Creating new cc-portal session for WeCom user');
 
-        // 确保用户存在于 storage
+        // Ensure user exists in storage
         await storage.getOrCreateUser(wecomUserId);
 
         const session = await manager.createSession({

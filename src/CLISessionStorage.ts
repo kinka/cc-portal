@@ -505,16 +505,16 @@ export class CLISessionStorage {
    * List sessions for a user.
    * Reads the user's own project directory directly; no full scan of all projects.
    */
-  async listUserSessions(userId: string): Promise<Array<{ id: string; ownerId: string; path?: string }>> {
+  async listUserSessions(userId: string): Promise<Array<{ id: string; ownerId: string; path?: string; lastModified: Date }>> {
     await this.initialize();
 
-    const result: Array<{ id: string; ownerId: string; path?: string }> = [];
+    const result: Array<{ id: string; ownerId: string; path?: string; lastModified: Date }> = [];
     const addedIds = new Set<string>();
 
     // Sessions tracked in memory cache (e.g. custom-path sessions)
     for (const [id, data] of this.newSessionsCache) {
       if (data.ownerId === userId) {
-        result.push({ id, ownerId: userId, path: data.path });
+        result.push({ id, ownerId: userId, path: data.path, lastModified: new Date() });
         addedIds.add(id);
       }
     }
@@ -525,7 +525,7 @@ export class CLISessionStorage {
     const ownedSessions = await this.listSessionsInDir(projectDir, userDir);
     for (const s of ownedSessions) {
       if (!addedIds.has(s.id)) {
-        result.push({ id: s.id, ownerId: userId, path: userDir });
+        result.push({ id: s.id, ownerId: userId, path: userDir, lastModified: s.lastModified });
         addedIds.add(s.id);
       }
     }
@@ -537,7 +537,13 @@ export class CLISessionStorage {
       if (joined) {
         const owner = await this.getSessionOwner(sessionId);
         if (owner && owner !== userId) {
-          result.push({ id: sessionId, ownerId: owner });
+          // Resolve session file for participant to get lastModified
+          const sessionInfo = await this.getSessionInfo(sessionId);
+          result.push({
+            id: sessionId,
+            ownerId: owner,
+            lastModified: sessionInfo?.lastModified || new Date()
+          });
           addedIds.add(sessionId);
         }
       }

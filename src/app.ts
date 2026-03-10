@@ -133,6 +133,7 @@ export function buildApp(options?: BuildAppOptions): FastifyInstance {
         sessionId: s.id,
         path: s.path,
         createdAt: s.createdAt,
+        lastModified: s.lastModified,
       })),
       quota: {
         max: userContext.maxSessions,
