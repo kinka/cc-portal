@@ -786,11 +786,10 @@ export class ClaudeAgentBackend extends EventEmitter {
    * Claude CLI uses a hash of the absolute project path to store session data.
    */
   static calculateProjectHash(projectPath: string): string {
-    const normalized = projectPath
-      .split('/')
-      .filter(Boolean)
-      .join('-');
-    return `-${normalized}`;
+    // Claude CLI replaces all non-alphanumeric characters with hyphens
+    // and ensures it starts with a hyphen for absolute paths.
+    const normalized = projectPath.replace(/[^a-zA-Z0-9]/g, '-');
+    return normalized.startsWith('-') ? normalized : `-${normalized}`;
   }
 
   /**

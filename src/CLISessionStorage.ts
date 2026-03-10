@@ -86,11 +86,10 @@ export class CLISessionStorage {
    * Calculate project hash from path (matches Claude CLI's hash algorithm)
    */
   static calculateProjectHash(projectPath: string): string {
-    const normalized = projectPath
-      .split('/')
-      .filter(Boolean)
-      .join('-');
-    return `-${normalized}`;
+    // Claude CLI replaces all non-alphanumeric characters with hyphens
+    // and ensures it starts with a hyphen for absolute paths.
+    const normalized = projectPath.replace(/[^a-zA-Z0-9]/g, '-');
+    return normalized.startsWith('-') ? normalized : `-${normalized}`;
   }
 
   /** Absolute working directory for a user (where their Claude sessions live) */

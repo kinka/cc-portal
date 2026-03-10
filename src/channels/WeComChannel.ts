@@ -118,22 +118,34 @@ export class WeComChannel {
     private async handleMessage(frame: WsFrame, userText: string): Promise<void> {
         const { manager, storage } = this.options;
 
-        // WeCom 侧发消息的 userId（可能是 from 或 sender）
-        const wecomUserId: string = (
-            (frame.body as { from?: { userid?: string }; sender?: string }).from?.userid ??
-            (frame.body as { sender?: string }).sender ??
-            'unknown'
-        );
+        // WeCom 侧的基础信息
+        const body = frame.body as {
+            from?: { userid?: string };
+            sender?: string;
+            chattype?: 'single' | 'group';
+            chatid?: string;
+        };
 
-        log.info({ wecomUserId, textLen: userText.length }, 'Received WeCom message');
+        const wecomUserId: string = body.from?.userid ?? body.sender ?? 'unknown';
+        const isGroup = body.chattype === 'group';
+        const chatid = body.chatid;
+
+        // Session 路由逻辑：如果是群聊，使用 chatid 隔离；如果是私聊，使用 userid 隔离
+        // 增加前缀以防止 userid 和 chatid 冲突
+        const sessionKey = isGroup && chatid ? `group:${chatid}` : wecomUserId;
+
+        log.info(
+            { wecomUserId, sessionKey, isGroup, chatid, textLen: userText.length },
+            'Received WeCom message'
+        );
 
         try {
             // 查找或创建 cc-portal session
-            const sessionId = await this.getOrCreateSession(wecomUserId, manager, storage);
-            const session = await manager.getSession(sessionId, wecomUserId);
+            const sessionId = await this.getOrCreateSession(sessionKey, manager, storage);
+            const session = await manager.getSession(sessionId, sessionKey);
 
             if (!session) {
-                log.error({ wecomUserId, sessionId }, 'Session not found after creation');
+                log.error({ sessionKey, sessionId }, 'Session not found after creation');
                 await this.wsClient.replyStream(frame, generateReqId('stream'), '❌ 会话初始化失败，请稍后重试。', true);
                 return;
             }
@@ -231,48 +243,48 @@ export class WeComChannel {
      * 获取或创建该 WeCom 用户对应的 cc-portal session
      */
     private async getOrCreateSession(
-        wecomUserId: string,
+        sessionKey: string,
         manager: ClaudeSessionManager,
         storage: CLISessionStorage,
     ): Promise<string> {
         // 1. First check in-memory map
-        let sessionId = this.userSessionMap.get(wecomUserId);
+        let sessionId = this.userSessionMap.get(sessionKey);
 
         if (sessionId) {
             // Validate session is still active/valid in manager
-            const session = await manager.getSession(sessionId, wecomUserId);
+            const session = await manager.getSession(sessionId, sessionKey);
             if (session) return sessionId;
             // session invalid or expired, remove from map
-            this.userSessionMap.delete(wecomUserId);
+            this.userSessionMap.delete(sessionKey);
         }
 
         // 2. If not in memory, check storage for existing sessions (persistence across restarts)
-        log.info({ wecomUserId }, 'Checking storage for existing sessions for WeCom user');
-        const existingSessions = await storage.listUserSessions(wecomUserId);
+        log.info({ sessionKey }, 'Checking storage for existing sessions');
+        const existingSessions = await storage.listUserSessions(sessionKey);
 
         if (existingSessions.length > 0) {
             // Sort by lastModified descending and pick the newest one
             existingSessions.sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime());
             const mostRecent = existingSessions[0];
 
-            log.info({ wecomUserId, sessionId: mostRecent.id, lastModified: mostRecent.lastModified }, 'Resuming existing session for WeCom user');
-            this.userSessionMap.set(wecomUserId, mostRecent.id);
+            log.info({ sessionKey, sessionId: mostRecent.id, lastModified: mostRecent.lastModified }, 'Resuming existing session');
+            this.userSessionMap.set(sessionKey, mostRecent.id);
             return mostRecent.id;
         }
 
         // 3. Create new session if none found
-        log.info({ wecomUserId }, 'Creating new cc-portal session for WeCom user');
+        log.info({ sessionKey }, 'Creating new cc-portal session');
 
         // Ensure user exists in storage
-        await storage.getOrCreateUser(wecomUserId);
+        await storage.getOrCreateUser(sessionKey);
 
         const session = await manager.createSession({
-            ownerId: wecomUserId,
+            ownerId: sessionKey,
             permissionMode: 'bypassPermissions',
         });
 
-        this.userSessionMap.set(wecomUserId, session.id);
-        log.info({ wecomUserId, sessionId: session.id }, 'WeCom session created');
+        this.userSessionMap.set(sessionKey, session.id);
+        log.info({ sessionKey, sessionId: session.id }, 'Session created');
         return session.id;
     }
 }
